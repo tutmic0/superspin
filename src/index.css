@@ -1,0 +1,17 @@
+:root {
+  --purple: #b24bff;
+  --blue: #00d4ff;
+  --pink: #ff2d78;
+  --green: #00ff88;
+  --gold: #ffd700;
+  --bg: #050510;
+  --card: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.08);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: #fff; font-family: 'Rajdhani', sans-serif; min-height: 100vh; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: 'Rajdhani', sans-serif; }
+input, textarea, select { font-family: 'Rajdhani', sans-serif; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--purple); border-radius: 2px; }

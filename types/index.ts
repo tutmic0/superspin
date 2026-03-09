@@ -5,6 +5,13 @@ export interface User {
   avatar_url: string
 }
 
+export interface GiveawayRequirement {
+  type: 'follow' | 'like' | 'retweet'
+  username?: string   // for follow
+  tweet_url?: string  // for like/retweet
+  tweet_id?: string   // extracted from tweet_url
+}
+
 export interface Giveaway {
   id: string
   title: string
@@ -15,6 +22,7 @@ export interface Giveaway {
   organizer_id: string
   organizer_username: string
   organizer_avatar: string
+  requirements: GiveawayRequirement[]
   created_at: string
 }
 

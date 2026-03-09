@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { createClient } from '@/lib/supabase'
 import { getGiveaway, getParticipants, getWinners, joinGiveaway, saveWinner, updateGiveawayStatus } from '@/lib/db'
-import type { Giveaway, Participant, Winner } from '@/types'
+import type { Giveaway, Participant, Winner, GiveawayRequirement } from '@/types'
 import type { User } from '@supabase/supabase-js'
 
 const WHEEL_COLORS = ['#b24bff', '#00d4ff', '#ff2d78', '#00ff88', '#ff9f00', '#7c3aed', '#06b6d4', '#ec4899', '#f43f5e', '#10b981']
@@ -160,6 +160,9 @@ export default function GiveawayPage() {
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
   const [hasJoined, setHasJoined] = useState(false)
+  const [showRequirements, setShowRequirements] = useState(false)
+  const [reqStep, setReqStep] = useState(0) // which requirement we're on
+  const [reqDone, setReqDone] = useState(false)
   const [countdown, setCountdown] = useState('')
   const [currentWinner, setCurrentWinner] = useState<(Participant & { prizeNum: number }) | null>(null)
   const [allWinnersModal, setAllWinnersModal] = useState(false)
@@ -500,7 +503,19 @@ export default function GiveawayPage() {
       })
       return
     }
+    const reqs = giveaway?.requirements || []
+    if (reqs.length > 0 && !reqDone) {
+      setReqStep(0)
+      setShowRequirements(true)
+      return
+    }
+    await doJoin()
+  }
+
+  const doJoin = async () => {
+    if (!user) return
     setJoining(true)
+    setShowRequirements(false)
     try {
       await joinGiveaway({
         giveaway_id: id,
@@ -523,6 +538,29 @@ export default function GiveawayPage() {
       console.error(e)
     }
     setJoining(false)
+  }
+
+  const handleReqAction = (req: any) => {
+    if (req.type === 'follow') {
+      window.open(`https://twitter.com/intent/follow?screen_name=${req.username}`, '_blank')
+    } else if (req.type === 'like') {
+      const tweetId = req.tweet_url?.split('/').pop()?.split('?')[0]
+      if (tweetId) window.open(`https://twitter.com/intent/like?tweet_id=${tweetId}`, '_blank')
+      else window.open(req.tweet_url, '_blank')
+    } else if (req.type === 'retweet') {
+      const tweetId = req.tweet_url?.split('/').pop()?.split('?')[0]
+      if (tweetId) window.open(`https://twitter.com/intent/retweet?tweet_id=${tweetId}`, '_blank')
+      else window.open(req.tweet_url, '_blank')
+    }
+    // After opening, move to next step after short delay
+    setTimeout(() => {
+      const reqs = giveaway?.requirements || []
+      if (reqStep + 1 >= reqs.length) {
+        setReqDone(true)
+      } else {
+        setReqStep(reqStep + 1)
+      }
+    }, 1500)
   }
 
   if (loading) {
@@ -778,6 +816,59 @@ export default function GiveawayPage() {
                 onClick={() => { setAllWinnersModal(false); router.push('/') }}
                 style={{ padding: '12px 28px', background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))', border: 'none', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer', boxShadow: '0 0 20px rgba(178,75,255,0.4)' }}>
                 CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Requirements modal */}
+      {showRequirements && giveaway && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.95)', backdropFilter: 'blur(20px)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(178,75,255,0.15), rgba(0,212,255,0.08))', border: '1px solid rgba(178,75,255,0.35)', borderRadius: '28px', padding: isMobile ? '32px 24px' : '48px', maxWidth: 460, width: '100%', boxShadow: '0 0 80px rgba(178,75,255,0.25)' }}>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '4px', color: '#00d4ff', marginBottom: '8px' }}>TO ENTER</div>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '1.2rem', fontWeight: 900, color: '#fff', marginBottom: '28px' }}>Complete the steps</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
+              {(giveaway.requirements || []).map((req, i) => {
+                const isDone = reqDone || i < reqStep
+                const isCurrent = !reqDone && i === reqStep
+                const label = req.type === 'follow' ? `Follow @${req.username}` : req.type === 'like' ? 'Like the tweet' : 'Retweet the tweet'
+                const icon = req.type === 'follow' ? '👤' : req.type === 'like' ? '❤️' : '🔁'
+
+                return (
+                  <div key={i}
+                    onClick={() => isCurrent && handleReqAction(req)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '14px',
+                      padding: '14px 18px',
+                      background: isDone ? 'rgba(0,255,136,0.06)' : isCurrent ? 'rgba(178,75,255,0.1)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${isDone ? 'rgba(0,255,136,0.3)' : isCurrent ? 'rgba(178,75,255,0.4)' : 'var(--border)'}`,
+                      borderRadius: '14px',
+                      cursor: isCurrent ? 'pointer' : 'default',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: isDone ? 'rgba(0,255,136,0.2)' : isCurrent ? 'rgba(178,75,255,0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
+                      {isDone ? '✓' : icon}
+                    </div>
+                    <span style={{ flex: 1, fontWeight: 600, color: isDone ? '#00ff88' : isCurrent ? '#fff' : 'rgba(255,255,255,0.4)', fontSize: '0.95rem' }}>{label}</span>
+                    {isCurrent && <span style={{ fontSize: '0.7rem', fontFamily: 'Orbitron, monospace', color: '#b24bff', letterSpacing: '1px' }}>TAP →</span>}
+                    {isDone && <span style={{ fontSize: '0.7rem', fontFamily: 'Orbitron, monospace', color: '#00ff88', letterSpacing: '1px' }}>DONE</span>}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => reqDone ? doJoin() : undefined}
+                disabled={!reqDone}
+                style={{ flex: 1, padding: '14px', background: reqDone ? 'linear-gradient(135deg, #00ff88, #00b4d8)' : 'rgba(255,255,255,0.05)', border: reqDone ? 'none' : '1px solid var(--border)', borderRadius: '12px', color: reqDone ? '#000' : 'rgba(255,255,255,0.3)', fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '2px', cursor: reqDone ? 'pointer' : 'not-allowed', transition: 'all 0.3s', boxShadow: reqDone ? '0 0 25px rgba(0,255,136,0.3)' : 'none' }}>
+                ✓ JOIN GIVEAWAY
+              </button>
+              <button onClick={() => setShowRequirements(false)}
+                style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '12px', color: 'var(--text-dim)', fontSize: '0.9rem', cursor: 'pointer' }}>
+                Cancel
               </button>
             </div>
           </div>

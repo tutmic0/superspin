@@ -1,8 +1,7 @@
 import { createClient } from './supabase'
-import type { Giveaway, Participant, Winner } from '@/types'
+import type { Giveaway, Participant, Winner, GiveawayRequirement } from '@/types'
 
 // ============ GIVEAWAYS ============
-
 export async function createGiveaway(data: {
   title: string
   description: string
@@ -11,6 +10,7 @@ export async function createGiveaway(data: {
   organizer_id: string
   organizer_username: string
   organizer_avatar: string
+  requirements: GiveawayRequirement[]
 }): Promise<Giveaway> {
   const supabase = createClient()
   const { data: giveaway, error } = await supabase
@@ -65,7 +65,6 @@ export async function updateGiveawayStatus(id: string, status: 'active' | 'in_pr
 }
 
 // ============ PARTICIPANTS ============
-
 export async function joinGiveaway(data: {
   giveaway_id: string
   user_id: string
@@ -95,7 +94,6 @@ export async function getParticipants(giveaway_id: string): Promise<Participant[
 }
 
 // ============ WINNERS ============
-
 export async function saveWinner(data: {
   giveaway_id: string
   user_id: string

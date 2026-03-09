@@ -55,7 +55,8 @@ function createTickSound(audioCtx: AudioContext, time: number, volume: number) {
 
 function playSpinSound(duration: number, onStop: () => void) {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext
+const ctx = new AudioCtx()
     const startInterval = 0.05  // fast ticks at start
     const endInterval = 0.4     // slow ticks at end
     let elapsed = 0

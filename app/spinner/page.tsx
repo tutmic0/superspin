@@ -128,7 +128,12 @@ export default function SpinnerPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const angleRef = useRef(0)
   const spinningRef = useRef(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 
   const [participants, setParticipants] = useState<string[]>([])
   const [winners, setWinners] = useState<string[]>([])
@@ -295,6 +300,7 @@ export default function SpinnerPage() {
 
   const doSpin = () => {
     if (spinningRef.current || participants.length < 1) return
+    if (gwMode && winners.length >= prizeCount) { alert('All prizes given out!'); return }
     const eligible = gwMode ? participants.filter(p => !winners.includes(p)) : participants
     if (eligible.length === 0) { alert('All winners picked!'); return }
 
@@ -368,10 +374,56 @@ export default function SpinnerPage() {
     playFireworkSound()
   }
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: 'browser' } as any,
+        audio: false,
+        preferCurrentTab: true,
+      } as any)
+      streamRef.current = stream
+      recordedChunksRef.current = []
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
+      recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setIsRecording(true)
+      setRecordedBlob(null)
+      // Auto-stop when user stops screen share
+      stream.getVideoTracks()[0].onended = () => stopRecording()
+    } catch (e) {
+      console.warn('Recording not available:', e)
+    }
+  }
+
+  const stopRecording = () => {
+    const recorder = mediaRecorderRef.current
+    const stream = streamRef.current
+    if (!recorder || recorder.state === 'inactive') return
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
+      stream?.getTracks().forEach(t => t.stop())
+      setRecordedBlob(blob)
+      setIsRecording(false)
+    }
+    recorder.stop()
+  }
+
+  const downloadRecording = () => {
+    if (!recordedBlob) return
+    const url = URL.createObjectURL(recordedBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'superspin-giveaway.webm'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const closeWinner = () => setCurrentWinner(null)
 
   const nextSpin = () => {
     setCurrentWinner(null)
+    if (gwMode && winners.length >= prizeCount) return
     setTimeout(() => doSpin(), 300)
   }
 
@@ -475,21 +527,81 @@ export default function SpinnerPage() {
               </div>
             )}
 
-            <button
-              onClick={doSpin}
-              disabled={!canSpin}
-              style={{
-                padding: '16px 60px',
-                background: canSpin ? 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))' : 'rgba(178,75,255,0.2)',
-                border: 'none', borderRadius: '50px', color: '#fff',
-                fontFamily: 'Orbitron, monospace', fontSize: '1rem', fontWeight: 700, letterSpacing: '3px',
-                cursor: canSpin ? 'pointer' : 'not-allowed',
-                boxShadow: canSpin ? '0 0 30px rgba(178,75,255,0.4)' : 'none',
-                transition: 'all 0.3s',
-              }}
-            >
-              ⚡ SPIN
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <button
+                onClick={doSpin}
+                disabled={!canSpin || (gwMode && winners.length >= prizeCount)}
+                style={{
+                  padding: '16px 60px',
+                  background: (canSpin && !(gwMode && winners.length >= prizeCount)) ? 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))' : 'rgba(178,75,255,0.2)',
+                  border: 'none', borderRadius: '50px', color: '#fff',
+                  fontFamily: 'Orbitron, monospace', fontSize: '1rem', fontWeight: 700, letterSpacing: '3px',
+                  cursor: (canSpin && !(gwMode && winners.length >= prizeCount)) ? 'pointer' : 'not-allowed',
+                  boxShadow: (canSpin && !(gwMode && winners.length >= prizeCount)) ? '0 0 30px rgba(178,75,255,0.4)' : 'none',
+                  transition: 'all 0.3s',
+                }}
+              >
+                ⚡ SPIN
+              </button>
+
+              {gwMode && winners.length >= prizeCount && prizeCount > 0 && (
+                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', letterSpacing: '2px', color: '#00ff88', textShadow: '0 0 10px rgba(0,255,136,0.5)' }}>
+                  ✔ ALL {prizeCount} WINNERS PICKED!
+                </div>
+              )}
+
+              {/* REC button */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                {!isRecording ? (
+                  <button
+                    onClick={startRecording}
+                    style={{
+                      padding: '10px 24px',
+                      background: 'rgba(255,45,120,0.12)',
+                      border: '1px solid rgba(255,45,120,0.4)',
+                      borderRadius: '50px', color: '#ff2d78',
+                      fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff2d78', display: 'inline-block' }} />
+                    REC
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopRecording}
+                    style={{
+                      padding: '10px 24px',
+                      background: 'rgba(255,45,120,0.25)',
+                      border: '1px solid #ff2d78',
+                      borderRadius: '50px', color: '#ff2d78',
+                      fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                      animation: 'pulse-glow 1s ease-in-out infinite',
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '2px', background: '#ff2d78', display: 'inline-block' }} />
+                    STOP
+                  </button>
+                )}
+                {recordedBlob && !isRecording && (
+                  <button
+                    onClick={downloadRecording}
+                    style={{
+                      padding: '10px 20px',
+                      background: 'rgba(0,255,136,0.1)',
+                      border: '1px solid rgba(0,255,136,0.4)',
+                      borderRadius: '50px', color: '#00ff88',
+                      fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ↓ SAVE
+                  </button>
+                )}
+              </div>
+            </div>
 
             {spinStatus && (
               <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', letterSpacing: '2px', color: 'rgba(255,255,255,0.4)' }}>

@@ -22,25 +22,123 @@ function timeLeft(endsAt: string): string {
 }
 
 function spawnConfetti() {
-  const colors = ['#b24bff', '#00d4ff', '#ff2d78', '#00ff88', '#ffd700']
-  for (let i = 0; i < 80; i++) {
+  const colors = ['#b24bff', '#00d4ff', '#ff2d78', '#00ff88', '#ffd700', '#ff6b6b', '#4ecdc4']
+  for (let i = 0; i < 120; i++) {
     const el = document.createElement('div')
+    const size = 6 + Math.random() * 12
     el.style.cssText = `
-      position:fixed;
-      width:${6 + Math.random() * 10}px;
-      height:${6 + Math.random() * 10}px;
-      top:-10px;
-      left:${Math.random() * 100}vw;
+      position:fixed;width:${size}px;height:${size}px;
+      top:-20px;left:${Math.random() * 100}vw;
       background:${colors[Math.floor(Math.random() * colors.length)]};
       border-radius:${Math.random() > 0.5 ? '50%' : '2px'};
-      pointer-events:none;
-      z-index:9999;
-      animation:confetti-fall ${2.5 + Math.random() * 2}s linear forwards;
-      animation-delay:${Math.random() * 0.5}s;
+      pointer-events:none;z-index:9999;
+      animation:confetti-fall ${2 + Math.random() * 3}s linear forwards;
+      animation-delay:${Math.random() * 0.8}s;
+      transform:rotate(${Math.random() * 360}deg);
     `
     document.body.appendChild(el)
-    setTimeout(() => el.remove(), 5000)
+    setTimeout(() => el.remove(), 6000)
   }
+}
+
+function getAudioContext(): AudioContext | null {
+  try {
+    const AC = (window.AudioContext || (window as any).webkitAudioContext)
+    return new AC()
+  } catch (e) {
+    return null
+  }
+}
+
+function playSpinSound(duration: number) {
+  const ctx = getAudioContext()
+  if (!ctx) return
+  const startInterval = 0.05
+  const endInterval = 0.4
+  let elapsed = 0
+
+  const scheduleTick = () => {
+    if (elapsed >= duration) return
+    const progress = elapsed / duration
+    const eased = 1 - Math.pow(1 - progress, 2)
+    const interval = startInterval + (endInterval - startInterval) * eased
+    const volume = Math.min(0.7, 0.3 + (1 - eased) * 0.4)
+
+    const bufferSize = Math.floor(ctx.sampleRate * 0.03)
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1))
+    }
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    const gain = ctx.createGain()
+    gain.gain.value = volume
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = 800
+    source.connect(filter)
+    filter.connect(gain)
+    gain.connect(ctx.destination)
+    source.start(ctx.currentTime)
+
+    elapsed += interval
+    setTimeout(scheduleTick, interval * 1000)
+  }
+  scheduleTick()
+}
+
+function playFireworkSound() {
+  const ctx = getAudioContext()
+  if (!ctx) return
+
+  const osc = ctx.createOscillator()
+  const oscGain = ctx.createGain()
+  osc.connect(oscGain)
+  oscGain.connect(ctx.destination)
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(300, ctx.currentTime)
+  osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.3)
+  oscGain.gain.setValueAtTime(0.2, ctx.currentTime)
+  oscGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32)
+  osc.start(ctx.currentTime)
+  osc.stop(ctx.currentTime + 0.35)
+
+  const delays = [0.3, 0.4, 0.5, 0.65, 0.8]
+  delays.forEach((delay, i) => {
+    const bufSize = Math.floor(ctx.sampleRate * 0.15)
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let j = 0; j < bufSize; j++) {
+      data[j] = (Math.random() * 2 - 1) * Math.exp(-j / (bufSize * 0.12))
+    }
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const g = ctx.createGain()
+    g.gain.value = 0.5 - i * 0.06
+    const f = ctx.createBiquadFilter()
+    f.type = 'lowpass'
+    f.frequency.value = 500 + Math.random() * 400
+    src.connect(f)
+    f.connect(g)
+    g.connect(ctx.destination)
+    src.start(ctx.currentTime + delay)
+  })
+
+  const notes = [523, 659, 784, 1047, 1319]
+  notes.forEach((freq, i) => {
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    o.connect(g)
+    g.connect(ctx.destination)
+    o.type = 'sine'
+    o.frequency.value = freq
+    const t = ctx.currentTime + 1.0 + i * 0.13
+    g.gain.setValueAtTime(0.25, t)
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35)
+    o.start(t)
+    o.stop(t + 0.4)
+  })
 }
 
 export default function GiveawayPage() {
@@ -77,14 +175,12 @@ export default function GiveawayPage() {
   const [isSpinSequenceRunning, setIsSpinSequenceRunning] = useState(false)
   const [winnersQueue, setWinnersQueue] = useState<Winner[]>([])
 
-  // Auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null))
     return () => subscription.unsubscribe()
   }, [])
 
-  // Load data
   useEffect(() => {
     if (!id) return
     Promise.all([getGiveaway(id), getParticipants(id), getWinners(id)]).then(([g, p, w]) => {
@@ -102,7 +198,6 @@ export default function GiveawayPage() {
     }
   }, [user, participants])
 
-  // Real-time participants
   useEffect(() => {
     if (!id) return
     const channel = supabase.channel(`giveaway-${id}`)
@@ -116,7 +211,6 @@ export default function GiveawayPage() {
     return () => { supabase.removeChannel(channel) }
   }, [id])
 
-  // Countdown
   useEffect(() => {
     if (!giveaway) return
     if (giveaway.status === 'ended' || giveaway.status === 'in_progress') {
@@ -129,7 +223,6 @@ export default function GiveawayPage() {
     return () => clearInterval(t)
   }, [giveaway])
 
-  // Auto-spin when timer hits zero
   useEffect(() => {
     if (!giveaway || giveaway.status !== 'active') return
     if (countdown === '00:00:00' && !isSpinSequenceRunning) {
@@ -138,7 +231,6 @@ export default function GiveawayPage() {
     }
   }, [countdown, giveaway, isSpinSequenceRunning])
 
-  // Draw wheel
   const drawWheel = useCallback((participantList: Participant[], angle = 0) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -182,7 +274,6 @@ export default function GiveawayPage() {
       ctx.restore()
     }
 
-    // Center
     ctx.beginPath()
     ctx.arc(cx, cy, 28, 0, Math.PI * 2)
     ctx.fillStyle = '#050510'
@@ -200,31 +291,35 @@ export default function GiveawayPage() {
     }
   }, [participants, drawWheel])
 
-  // Spin single winner
   const spinForWinner = (eligible: Participant[]): Promise<Participant> => {
     return new Promise(resolve => {
       const winner = eligible[Math.floor(Math.random() * eligible.length)]
 
       if (eligible.length <= SLOT_THRESHOLD) {
         const idx = eligible.findIndex(p => p.user_id === winner.user_id)
-        const sl = 360 / eligible.length
-        const target = angleRef.current + 360 * 8 + (360 - idx * sl - sl / 2 - (angleRef.current % 360))
+        const n = eligible.length
+        const sl = 360 / n
+        // Fix: point to center of sector, not the edge
+        const sectorCenter = idx * sl + sl / 2
+        const current = angleRef.current % 360
+        const target = angleRef.current + (360 * 8) - current - sectorCenter + 90
         const start = angleRef.current
         const t0 = Date.now()
         const dur = 4500
 
+        playSpinSound(dur / 1000)
+
         const anim = () => {
           const progress = Math.min((Date.now() - t0) / dur, 1)
           const eased = 1 - Math.pow(1 - progress, 4)
-          const angle = (start + (target - start) * eased) * Math.PI / 180
-          angleRef.current = start + (target - start) * eased
-          drawWheel(eligible, angle)
+          const newAngle = start + (target - start) * eased
+          angleRef.current = newAngle
+          drawWheel(eligible, newAngle * Math.PI / 180)
           if (progress < 1) requestAnimationFrame(anim)
           else resolve(winner)
         }
         requestAnimationFrame(anim)
       } else {
-        // Slot machine animation
         let count = 0
         const max = 25 + Math.floor(Math.random() * 15)
         const canvas = canvasRef.current!
@@ -246,7 +341,7 @@ export default function GiveawayPage() {
             ctx.clearRect(0, 0, canvas.width, canvas.height)
             ctx.fillStyle = '#050510'
             ctx.fillRect(0, 0, canvas.width, canvas.height)
-            ctx.fillStyle = 'var(--neon-purple)'
+            ctx.fillStyle = '#b24bff'
             ctx.font = 'bold 22px Orbitron, monospace'
             ctx.textAlign = 'center'
             ctx.fillText('@' + winner.username, canvas.width / 2, canvas.height / 2)
@@ -258,7 +353,6 @@ export default function GiveawayPage() {
     })
   }
 
-  // Start recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -277,7 +371,6 @@ export default function GiveawayPage() {
     }
   }
 
-  // Stop recording and get blob
   const stopRecording = (): Promise<Blob | null> => {
     return new Promise(resolve => {
       const recorder = mediaRecorderRef.current
@@ -292,7 +385,6 @@ export default function GiveawayPage() {
     })
   }
 
-  // Full spin sequence
   const startSpinSequence = async () => {
     if (!giveaway || spinningRef.current) return
     spinningRef.current = true
@@ -304,14 +396,14 @@ export default function GiveawayPage() {
     await startRecording()
 
     const allWinners: Winner[] = []
-    let remaining = [...participants]
 
     for (let i = 0; i < giveaway.winner_count; i++) {
-      const eligible = remaining.filter(p => !allWinners.some(w => w.user_id === p.user_id))
+      const eligible = participants.filter(p => !allWinners.some(w => w.user_id === p.user_id))
       if (eligible.length === 0) break
 
       const winner = await spinForWinner(eligible)
       spawnConfetti()
+      playFireworkSound()
 
       const saved = await saveWinner({
         giveaway_id: giveaway.id,
@@ -326,29 +418,23 @@ export default function GiveawayPage() {
       setWinners(prev => [...prev, saved])
       setCurrentWinner({ ...winner, prizeNum: i + 1 })
 
-      // Wait for user to dismiss popup (2s auto-dismiss between spins)
       await new Promise(res => setTimeout(res, 3000))
       setCurrentWinner(null)
       await new Promise(res => setTimeout(res, 500))
     }
 
-    // Stop recording
     const videoBlob = await stopRecording()
 
-    // Update status to ended
     await updateGiveawayStatus(giveaway.id, 'ended')
     setGiveaway(prev => prev ? { ...prev, status: 'ended' } : prev)
 
-    // Show all winners modal
     setWinnersQueue(allWinners)
     setAllWinnersModal(true)
     spinningRef.current = false
     setIsSpinSequenceRunning(false)
 
-    // TODO: Upload video to @superspinonline (requires X API setup)
     if (videoBlob) {
       console.log('Video ready for upload:', videoBlob.size, 'bytes')
-      // Will be implemented when @superspinonline X API is configured
     }
   }
 
@@ -415,7 +501,6 @@ export default function GiveawayPage() {
       <Navbar />
       <main style={{ flex: 1, padding: isMobile ? '20px 16px' : '40px', maxWidth: 1300, margin: '0 auto', width: '100%' }}>
 
-        {/* Back button */}
         <button
           onClick={() => router.push('/')}
           style={{
@@ -433,7 +518,6 @@ export default function GiveawayPage() {
           ← BACK
         </button>
 
-        {/* Header */}
         <div style={{ marginBottom: isMobile ? '24px' : '40px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
             {giveaway.organizer_avatar && (
@@ -454,16 +538,14 @@ export default function GiveawayPage() {
           )}
         </div>
 
-        {/* Layout */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '1fr 360px',
           gap: isMobile ? '24px' : '40px',
         }}>
-          {/* Left — Wheel */}
+          {/* Wheel */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? '20px' : '28px' }}>
 
-            {/* Wheel container */}
             <div style={{ position: 'relative' }}>
               <div style={{
                 position: 'absolute', inset: -20, borderRadius: '50%',
@@ -487,8 +569,8 @@ export default function GiveawayPage() {
                   width: 0, height: 0,
                   borderTop: `${isMobile ? 12 : 16}px solid transparent`,
                   borderBottom: `${isMobile ? 12 : 16}px solid transparent`,
-                  borderRight: `${isMobile ? 24 : 30}px solid var(--neon-pink)`,
-                  filter: 'drop-shadow(0 0 10px var(--neon-pink))',
+                  borderRight: `${isMobile ? 24 : 30}px solid #ff2d78`,
+                  filter: 'drop-shadow(0 0 10px #ff2d78)',
                   zIndex: 10,
                 }} />
               )}
@@ -503,17 +585,12 @@ export default function GiveawayPage() {
               borderRadius: '16px',
               backdropFilter: 'blur(10px)',
             }}>
+              <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '2px', color: 'var(--text-dim)' }}>TIME LEFT</span>
               <span style={{
-                fontFamily: 'Orbitron, monospace',
-                fontSize: '0.65rem', letterSpacing: '2px', color: 'var(--text-dim)',
-              }}>TIME LEFT</span>
-              <span style={{
-                fontFamily: 'Orbitron, monospace',
-                fontSize: '1.5rem', fontWeight: 700,
-                color: 'var(--neon-blue)',
-                textShadow: '0 0 20px rgba(0,212,255,0.5)',
+                fontFamily: 'Orbitron, monospace', fontSize: '1.5rem', fontWeight: 700,
+                color: 'var(--neon-blue)', textShadow: '0 0 20px rgba(0,212,255,0.5)',
               }}>
-                {countdown}
+                {isEnded ? 'ENDED' : countdown}
               </span>
             </div>
 
@@ -525,7 +602,7 @@ export default function GiveawayPage() {
                   letterSpacing: '3px', color: 'var(--gold)',
                   marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px',
                 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 8px var(--gold)', display: 'inline-block' }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--gold)', display: 'inline-block' }} />
                   WINNERS ({winners.length}/{giveaway.winner_count})
                 </div>
                 {winners.map(w => (
@@ -544,7 +621,7 @@ export default function GiveawayPage() {
               </div>
             )}
 
-            {/* Spin Now button (organizer only) */}
+            {/* Spin Now button */}
             {isOrg && isActive && !isSpinSequenceRunning && (
               <button
                 onClick={startSpinSequence}
@@ -558,25 +635,13 @@ export default function GiveawayPage() {
                   boxShadow: '0 0 40px rgba(255,45,120,0.4)',
                   transition: 'all 0.3s',
                 }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'translateY(-3px)'
-                  e.currentTarget.style.boxShadow = '0 0 60px rgba(255,45,120,0.6)'
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'translateY(0)'
-                  e.currentTarget.style.boxShadow = '0 0 40px rgba(255,45,120,0.4)'
-                }}
               >
                 🎰 SPIN NOW
               </button>
             )}
 
             {isSpinSequenceRunning && (
-              <div style={{
-                fontFamily: 'Orbitron, monospace', fontSize: '0.75rem',
-                letterSpacing: '3px', color: 'var(--neon-purple)',
-                animation: 'blink 1s infinite',
-              }}>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', letterSpacing: '3px', color: 'var(--neon-purple)' }}>
                 SPINNING...
               </div>
             )}
@@ -584,12 +649,8 @@ export default function GiveawayPage() {
             {/* Join button */}
             {!isOrg && isActive && (
               hasJoined ? (
-                <div style={{
-                  fontFamily: 'Orbitron, monospace', fontSize: '0.75rem',
-                  letterSpacing: '2px', color: 'var(--neon-green)',
-                  textShadow: '0 0 15px rgba(0,255,136,0.5)',
-                }}>
-                  ✓ YOU'RE IN!
+                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', letterSpacing: '2px', color: 'var(--neon-green)', textShadow: '0 0 15px rgba(0,255,136,0.5)' }}>
+                  ✔ YOU'RE IN!
                 </div>
               ) : (
                 <button
@@ -606,12 +667,11 @@ export default function GiveawayPage() {
                     opacity: joining ? 0.7 : 1,
                   }}
                 >
-                  {joining ? 'JOINING...' : user ? '🎯 JOIN GIVEAWAY' : '𝕏 LOGIN & JOIN'}
+                  {joining ? 'JOINING...' : user ? '🎟 JOIN GIVEAWAY' : '🐦 LOGIN & JOIN'}
                 </button>
               )
             )}
 
-            {/* Share ended giveaway */}
             {isEnded && winnersQueue.length > 0 && (
               <button
                 onClick={() => {
@@ -626,72 +686,41 @@ export default function GiveawayPage() {
                   border: '1px solid var(--border)',
                   borderRadius: '50px', color: '#fff',
                   fontSize: '0.9rem', cursor: 'pointer',
-                  transition: 'all 0.2s',
                 }}
               >
-                𝕏 Share Results
+                🐦 Share Results
               </button>
             )}
           </div>
 
-          {/* Right — Sidebar */}
+          {/* Sidebar */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Prize pool */}
-            <div style={{
-              background: 'var(--dark-card)', border: '1px solid var(--border)',
-              borderRadius: '20px', padding: '24px', backdropFilter: 'blur(10px)',
-            }}>
-              <div style={{
-                fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-                letterSpacing: '3px', color: 'var(--neon-blue)', marginBottom: '16px',
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-blue)', boxShadow: '0 0 8px var(--neon-blue)', display: 'inline-block' }} />
+            <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', backdropFilter: 'blur(10px)' }}>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: 'var(--neon-blue)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-blue)', display: 'inline-block' }} />
                 PRIZE POOL
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span style={{ fontSize: '2rem' }}>🏆</span>
+                <span style={{ fontSize: '2rem' }}>🎁</span>
                 <div>
-                  <div style={{
-                    fontFamily: 'Orbitron, monospace', fontSize: '1.8rem',
-                    fontWeight: 700, color: 'var(--neon-purple)',
-                    textShadow: '0 0 20px rgba(178,75,255,0.5)',
-                  }}>{giveaway.winner_count - winners.length}</div>
+                  <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '1.8rem', fontWeight: 700, color: 'var(--neon-purple)', textShadow: '0 0 20px rgba(178,75,255,0.5)' }}>{giveaway.winner_count - winners.length}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>prizes remaining</div>
                 </div>
               </div>
             </div>
 
-            {/* Participants */}
-            <div style={{
-              background: 'var(--dark-card)', border: '1px solid var(--border)',
-              borderRadius: '20px', padding: '24px', backdropFilter: 'blur(10px)', flex: 1,
-            }}>
-              <div style={{
-                fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-                letterSpacing: '3px', color: 'var(--neon-purple)', marginBottom: '16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
+            <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', backdropFilter: 'blur(10px)', flex: 1 }}>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: 'var(--neon-purple)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-purple)', boxShadow: '0 0 8px var(--neon-purple)', display: 'inline-block' }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-purple)', display: 'inline-block' }} />
                   PARTICIPANTS
                 </span>
-                <span style={{
-                  padding: '3px 10px', borderRadius: '20px',
-                  background: 'rgba(178,75,255,0.1)',
-                  border: '1px solid rgba(178,75,255,0.2)',
-                  fontSize: '0.65rem',
-                }}>{participants.length}</span>
+                <span style={{ padding: '3px 10px', borderRadius: '20px', background: 'rgba(178,75,255,0.1)', border: '1px solid rgba(178,75,255,0.2)', fontSize: '0.65rem' }}>{participants.length}</span>
               </div>
 
-              <div style={{
-                display: 'flex', flexDirection: 'column', gap: '8px',
-                maxHeight: 360, overflowY: 'auto', paddingRight: '4px',
-              }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: 360, overflowY: 'auto', paddingRight: '4px' }}>
                 {participants.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-                    No participants yet
-                  </div>
+                  <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>No participants yet</div>
                 ) : participants.map(p => (
                   <div key={p.id} style={{
                     display: 'flex', alignItems: 'center', gap: '10px',
@@ -699,22 +728,12 @@ export default function GiveawayPage() {
                     background: 'rgba(255,255,255,0.03)',
                     border: '1px solid var(--border)',
                     borderRadius: '10px',
-                    animation: 'slide-in 0.3s ease-out',
                     opacity: winners.some(w => w.user_id === p.user_id) ? 0.5 : 1,
                   }}>
                     {p.avatar_url ? (
-                      <img src={p.avatar_url} referrerPolicy="no-referrer" style={{
-                        width: 32, height: 32, borderRadius: '50%',
-                        border: '2px solid rgba(178,75,255,0.3)',
-                      }} />
+                      <img src={p.avatar_url} referrerPolicy="no-referrer" style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(178,75,255,0.3)' }} />
                     ) : (
-                      <div style={{
-                        width: 32, height: 32, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700,
-                        flexShrink: 0,
-                      }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>
                         {p.username[0]?.toUpperCase()}
                       </div>
                     )}
@@ -734,133 +753,63 @@ export default function GiveawayPage() {
 
       {/* Winner popup */}
       {currentWinner && (
-        <div style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(5,5,16,0.92)',
-          backdropFilter: 'blur(20px)',
-          zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.92)', backdropFilter: 'blur(20px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{
             background: 'linear-gradient(135deg, rgba(178,75,255,0.15), rgba(0,212,255,0.1))',
             border: '1px solid rgba(178,75,255,0.4)',
-            borderRadius: '28px', padding: '52px',
-            textAlign: 'center', maxWidth: 440, width: '90%',
-            boxShadow: '0 0 80px rgba(178,75,255,0.3), 0 0 160px rgba(0,212,255,0.1)',
+            borderRadius: '28px', padding: isMobile ? '36px 24px' : '52px',
+            textAlign: 'center', maxWidth: 440, width: '100%',
+            boxShadow: '0 0 80px rgba(178,75,255,0.3)',
             animation: 'winner-appear 0.5s cubic-bezier(0.34,1.56,0.64,1)',
           }}>
-            <span style={{
-              fontSize: '4rem', marginBottom: '16px', display: 'block',
-              animation: 'trophy-bounce 1s ease-in-out infinite alternate',
-            }}>🏆</span>
-            <div style={{
-              fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-              letterSpacing: '4px', color: 'var(--gold)', marginBottom: '12px',
-            }}>
-              {giveaway.winner_count > 1
-                ? `PRIZE #${currentWinner.prizeNum} OF ${giveaway.winner_count}`
-                : 'WINNER!'}
+            <span style={{ fontSize: '4rem', marginBottom: '16px', display: 'block' }}>🏆</span>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '4px', color: 'var(--gold)', marginBottom: '12px' }}>
+              {giveaway.winner_count > 1 ? `PRIZE #${currentWinner.prizeNum} OF ${giveaway.winner_count}` : 'WINNER!'}
             </div>
             {currentWinner.avatar_url ? (
-              <img src={currentWinner.avatar_url} referrerPolicy="no-referrer" style={{
-                width: 90, height: 90, borderRadius: '50%',
-                border: '3px solid var(--gold)',
-                boxShadow: '0 0 30px rgba(255,215,0,0.4)',
-                margin: '0 auto 16px', display: 'block',
-              }} />
+              <img src={currentWinner.avatar_url} referrerPolicy="no-referrer" style={{ width: 90, height: 90, borderRadius: '50%', border: '3px solid var(--gold)', boxShadow: '0 0 30px rgba(255,215,0,0.4)', margin: '0 auto 16px', display: 'block' }} />
             ) : (
-              <div style={{
-                width: 90, height: 90, borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'Orbitron, monospace', fontSize: '1.8rem', fontWeight: 700,
-                border: '3px solid var(--gold)',
-                boxShadow: '0 0 30px rgba(255,215,0,0.4)',
-                margin: '0 auto 16px',
-              }}>
+              <div style={{ width: 90, height: 90, borderRadius: '50%', background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Orbitron, monospace', fontSize: '1.8rem', fontWeight: 700, border: '3px solid var(--gold)', margin: '0 auto 16px' }}>
                 {currentWinner.username[0]?.toUpperCase()}
               </div>
             )}
-            <div style={{
-              fontFamily: 'Orbitron, monospace', fontSize: '1.8rem', fontWeight: 900,
-              background: 'linear-gradient(135deg, var(--gold), #ffed8a)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              marginBottom: '8px',
-            }}>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: isMobile ? '1.4rem' : '1.8rem', fontWeight: 900, background: 'linear-gradient(135deg, var(--gold), #ffed8a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', marginBottom: '8px' }}>
               @{currentWinner.username}
             </div>
-            <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-              Spinning next winner...
-            </div>
+            <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Spinning next winner...</div>
           </div>
         </div>
       )}
 
       {/* All winners modal */}
       {allWinnersModal && (
-        <div style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(5,5,16,0.92)',
-          backdropFilter: 'blur(20px)',
-          zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.92)', backdropFilter: 'blur(20px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{
             background: 'linear-gradient(135deg, rgba(178,75,255,0.15), rgba(0,212,255,0.1))',
             border: '1px solid rgba(178,75,255,0.4)',
-            borderRadius: '28px', padding: '52px',
-            textAlign: 'center', maxWidth: 500, width: '90%',
+            borderRadius: '28px', padding: isMobile ? '36px 24px' : '52px',
+            textAlign: 'center', maxWidth: 500, width: '100%',
             boxShadow: '0 0 80px rgba(178,75,255,0.3)',
             animation: 'winner-appear 0.5s cubic-bezier(0.34,1.56,0.64,1)',
           }}>
             <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '16px' }}>🎊</span>
-            <div style={{
-              fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-              letterSpacing: '4px', color: 'var(--neon-blue)', marginBottom: '8px',
-            }}>
-              {giveaway.title}
-            </div>
-            <div style={{
-              fontFamily: 'Orbitron, monospace', fontSize: '1.4rem', fontWeight: 900,
-              background: 'linear-gradient(135deg, var(--gold), #ffed8a)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              marginBottom: '32px',
-            }}>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '4px', color: 'var(--neon-blue)', marginBottom: '8px' }}>{giveaway.title}</div>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '1.4rem', fontWeight: 900, background: 'linear-gradient(135deg, var(--gold), #ffed8a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', marginBottom: '32px' }}>
               ALL {winnersQueue.length} WINNERS!
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '32px' }}>
               {winnersQueue.map(w => (
-                <div key={w.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '12px',
-                  padding: '12px 16px',
-                  background: 'rgba(255,215,0,0.06)',
-                  border: '1px solid rgba(255,215,0,0.15)',
-                  borderRadius: '14px',
-                  textAlign: 'left',
-                }}>
-                  <span style={{
-                    fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-                    color: 'var(--gold)', minWidth: 24,
-                  }}>#{w.prize_number}</span>
+                <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: 'rgba(255,215,0,0.06)', border: '1px solid rgba(255,215,0,0.15)', borderRadius: '14px', textAlign: 'left' }}>
+                  <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', color: 'var(--gold)', minWidth: 24 }}>#{w.prize_number}</span>
                   {w.avatar_url ? (
-                    <img src={w.avatar_url} referrerPolicy="no-referrer" style={{
-                      width: 36, height: 36, borderRadius: '50%',
-                      border: '2px solid rgba(255,215,0,0.4)',
-                    }} />
+                    <img src={w.avatar_url} referrerPolicy="no-referrer" style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid rgba(255,215,0,0.4)' }} />
                   ) : (
-                    <div style={{
-                      width: 36, height: 36, borderRadius: '50%',
-                      background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: 700, fontSize: '0.9rem',
-                    }}>{w.username[0]?.toUpperCase()}</div>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem' }}>{w.username[0]?.toUpperCase()}</div>
                   )}
                   <span style={{ fontWeight: 700 }}>@{w.username}</span>
                 </div>
               ))}
             </div>
-
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
                 onClick={() => {
@@ -868,30 +817,12 @@ export default function GiveawayPage() {
                   const text = `🎉 Winners of "${giveaway.title}": ${winnersList}\n\nHosted on @superspinonline`
                   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank')
                 }}
-                style={{
-                  padding: '12px 28px',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '50px', color: '#fff',
-                  fontFamily: 'Orbitron, monospace',
-                  fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px',
-                  cursor: 'pointer',
-                }}
-              >
-                𝕏 Share
+                style={{ padding: '12px 28px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
+                🐦 Share
               </button>
               <button
                 onClick={() => { setAllWinnersModal(false); router.push('/') }}
-                style={{
-                  padding: '12px 28px',
-                  background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))',
-                  border: 'none', borderRadius: '50px', color: '#fff',
-                  fontFamily: 'Orbitron, monospace',
-                  fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px',
-                  cursor: 'pointer',
-                  boxShadow: '0 0 20px rgba(178,75,255,0.4)',
-                }}
-              >
+                style={{ padding: '12px 28px', background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))', border: 'none', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer', boxShadow: '0 0 20px rgba(178,75,255,0.4)' }}>
                 CLOSE
               </button>
             </div>

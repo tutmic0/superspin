@@ -9,62 +9,132 @@ const COLORS = ['#b24bff', '#00d4ff', '#ff2d78', '#00ff88', '#ff9f00', '#7c3aed'
 const SLOT_THRESHOLD = 50
 
 function spawnConfetti() {
-  const colors = ['#b24bff', '#00d4ff', '#ff2d78', '#00ff88', '#ffd700']
-  for (let i = 0; i < 70; i++) {
+  const colors = ['#b24bff', '#00d4ff', '#ff2d78', '#00ff88', '#ffd700', '#ff6b6b', '#4ecdc4']
+  for (let i = 0; i < 120; i++) {
     const el = document.createElement('div')
+    const size = 6 + Math.random() * 12
     el.style.cssText = `
-      position:fixed;width:${6 + Math.random() * 10}px;height:${6 + Math.random() * 10}px;
-      top:-10px;left:${Math.random() * 100}vw;
+      position:fixed;
+      width:${size}px;height:${size}px;
+      top:-20px;left:${Math.random() * 100}vw;
       background:${colors[Math.floor(Math.random() * colors.length)]};
       border-radius:${Math.random() > 0.5 ? '50%' : '2px'};
       pointer-events:none;z-index:9999;
-      animation:confetti-fall ${2.5 + Math.random() * 2}s linear forwards;
-      animation-delay:${Math.random() * 0.6}s;
+      animation:confetti-fall ${2 + Math.random() * 3}s linear forwards;
+      animation-delay:${Math.random() * 0.8}s;
+      transform:rotate(${Math.random() * 360}deg);
     `
     document.body.appendChild(el)
-    setTimeout(() => el.remove(), 5000)
+    setTimeout(() => el.remove(), 6000)
   }
 }
 
-function playSpinSound() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const duration = 4.5
-    const startFreq = 80
-    const endFreq = 20
-
-    const oscillator = ctx.createOscillator()
-    const gainNode = ctx.createGain()
-    oscillator.connect(gainNode)
-    gainNode.connect(ctx.destination)
-
-    oscillator.type = 'sawtooth'
-    oscillator.frequency.setValueAtTime(startFreq, ctx.currentTime)
-    oscillator.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + duration)
-
-    gainNode.gain.setValueAtTime(0.15, ctx.currentTime)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration)
-
-    oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + duration)
-  } catch (e) {}
+// Realistic wheel tick sound
+function createTickSound(audioCtx: AudioContext, time: number, volume: number) {
+  const bufferSize = audioCtx.sampleRate * 0.03
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1))
+  }
+  const source = audioCtx.createBufferSource()
+  source.buffer = buffer
+  const gain = audioCtx.createGain()
+  gain.gain.setValueAtTime(volume, time)
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.03)
+  const filter = audioCtx.createBiquadFilter()
+  filter.type = 'bandpass'
+  filter.frequency.value = 800
+  filter.Q.value = 0.5
+  source.connect(filter)
+  filter.connect(gain)
+  gain.connect(audioCtx.destination)
+  source.start(time)
+  source.stop(time + 0.03)
 }
 
-function playWinnerSound() {
+function playSpinSound(duration: number, onStop: () => void) {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const notes = [523, 659, 784, 1047]
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator()
+    const startInterval = 0.05  // fast ticks at start
+    const endInterval = 0.4     // slow ticks at end
+    let elapsed = 0
+    let tickCount = 0
+    
+    const scheduleTicks = () => {
+      if (elapsed >= duration) {
+        setTimeout(onStop, 0)
+        return
+      }
+      const progress = elapsed / duration
+      const eased = 1 - Math.pow(1 - progress, 2)
+      const interval = startInterval + (endInterval - startInterval) * eased
+      const volume = 0.3 + (1 - eased) * 0.4
+      
+      createTickSound(ctx, ctx.currentTime, Math.min(volume, 0.7))
+      elapsed += interval
+      tickCount++
+      setTimeout(scheduleTicks, interval * 1000)
+    }
+    scheduleTicks()
+    return ctx
+  } catch (e) {
+    setTimeout(onStop, duration * 1000)
+  }
+}
+
+function playFireworkSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    
+    // Multiple explosion pops
+    [0, 0.1, 0.25, 0.4, 0.6].forEach((delay, i) => {
+      const bufferSize = ctx.sampleRate * 0.15
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+      const data = buffer.getChannelData(0)
+      for (let j = 0; j < bufferSize; j++) {
+        data[j] = (Math.random() * 2 - 1) * Math.exp(-j / (bufferSize * 0.15))
+      }
+      const source = ctx.createBufferSource()
+      source.buffer = buffer
       const gain = ctx.createGain()
-      osc.connect(gain)
+      gain.gain.setValueAtTime(0.5 - i * 0.05, ctx.currentTime + delay)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3)
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.value = 400 + Math.random() * 600
+      source.connect(filter)
+      filter.connect(gain)
       gain.connect(ctx.destination)
-      osc.type = 'sine'
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.15)
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.4)
-      osc.start(ctx.currentTime + i * 0.15)
-      osc.stop(ctx.currentTime + i * 0.15 + 0.4)
+      source.start(ctx.currentTime + delay)
+    })
+
+    // Rising whistle before explosion
+    const osc = ctx.createOscillator()
+    const oscGain = ctx.createGain()
+    osc.connect(oscGain)
+    oscGain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(200, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.3)
+    oscGain.gain.setValueAtTime(0.15, ctx.currentTime)
+    oscGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 0.35)
+
+    // Fanfare notes after
+    const notes = [523, 659, 784, 1047, 1319]
+    notes.forEach((freq, i) => {
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+      o.connect(g)
+      g.connect(ctx.destination)
+      o.type = 'sine'
+      o.frequency.setValueAtTime(freq, ctx.currentTime + 0.5 + i * 0.12)
+      g.gain.setValueAtTime(0.25, ctx.currentTime + 0.5 + i * 0.12)
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5 + i * 0.12 + 0.3)
+      o.start(ctx.currentTime + 0.5 + i * 0.12)
+      o.stop(ctx.currentTime + 0.5 + i * 0.12 + 0.3)
     })
   } catch (e) {}
 }
@@ -93,7 +163,7 @@ export default function SpinnerPage() {
 
   const canvasSize = isMobile ? 300 : 440
 
-  const drawWheel = useCallback((list: string[], angle = 0, size = 440) => {
+  const drawWheel = useCallback((list: string[], angle = 0) => {
     const canvas = canvasRef.current
     if (!canvas || list.length === 0) return
     const ctx = canvas.getContext('2d')!
@@ -106,11 +176,11 @@ export default function SpinnerPage() {
     if (n > SLOT_THRESHOLD) {
       ctx.fillStyle = '#050510'
       ctx.fillRect(0, 0, W, H)
-      ctx.fillStyle = 'var(--text-dim)'
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
       ctx.font = 'bold 14px Orbitron, monospace'
       ctx.textAlign = 'center'
       ctx.fillText(`${n} PARTICIPANTS`, cx, cy - 20)
-      ctx.fillStyle = 'var(--neon-purple)'
+      ctx.fillStyle = '#b24bff'
       ctx.font = 'bold 12px Orbitron, monospace'
       ctx.fillText('SLOT MODE', cx, cy + 10)
       return
@@ -121,6 +191,7 @@ export default function SpinnerPage() {
     ctx.rotate(angle)
     ctx.translate(-cx, -cy)
 
+    // Draw sectors — offset by half slice so pointer hits CENTER of sector
     const sl = (Math.PI * 2) / n
     for (let i = 0; i < n; i++) {
       const start = i * sl - Math.PI / 2
@@ -132,7 +203,7 @@ export default function SpinnerPage() {
       ctx.arc(cx, cy, r, start, end)
       ctx.fillStyle = COLORS[i % COLORS.length]
       ctx.fill()
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'
       ctx.lineWidth = 2
       ctx.stroke()
 
@@ -147,6 +218,7 @@ export default function SpinnerPage() {
       ctx.restore()
     }
 
+    // Center circle
     ctx.beginPath()
     ctx.arc(cx, cy, 28, 0, Math.PI * 2)
     ctx.fillStyle = '#050510'
@@ -163,11 +235,11 @@ export default function SpinnerPage() {
     setParticipants(list)
     setWinners([])
     angleRef.current = 0
-    drawWheel(list, 0, canvasSize)
+    drawWheel(list, 0)
   }
 
   useEffect(() => {
-    if (participants.length > 0) drawWheel(participants, angleRef.current, canvasSize)
+    if (participants.length > 0) drawWheel(participants, angleRef.current)
   }, [participants, drawWheel, canvasSize])
 
   const doSpin = () => {
@@ -177,14 +249,20 @@ export default function SpinnerPage() {
 
     spinningRef.current = true
     setSpinStatus('Spinning...')
-    playSpinSound()
+
     const winner = eligible[Math.floor(Math.random() * eligible.length)]
 
     if (participants.length <= SLOT_THRESHOLD) {
       const idx = eligible.indexOf(winner)
       const n = eligible.length
       const sl = 360 / n
-      const target = angleRef.current + 360 * 8 + (360 - idx * sl - sl / 2 - (angleRef.current % 360))
+      // Target: winner sector CENTER points to the pointer (top = 0 + 90 deg offset)
+      // Pointer is at right side (3 o'clock), so we want winner at 0 degrees from right
+      // Each sector center: idx * sl + sl/2
+      // We want -(idx * sl + sl/2) to be at 0 (right pointer), plus many full rotations
+      const sectorCenter = idx * sl + sl / 2
+      const current = angleRef.current % 360
+      const target = angleRef.current + (360 * 8) - current - sectorCenter + 90
       const start = angleRef.current
       const t0 = Date.now()
       const dur = 4500
@@ -194,7 +272,7 @@ export default function SpinnerPage() {
         const eased = 1 - Math.pow(1 - progress, 4)
         const newAngle = start + (target - start) * eased
         angleRef.current = newAngle
-        drawWheel(eligible, newAngle * Math.PI / 180, canvasSize)
+        drawWheel(eligible, newAngle * Math.PI / 180)
         if (progress < 1) {
           requestAnimationFrame(anim)
         } else {
@@ -203,6 +281,8 @@ export default function SpinnerPage() {
           showWinner(winner)
         }
       }
+
+      playSpinSound(dur / 1000, () => {})
       requestAnimationFrame(anim)
     } else {
       let count = 0
@@ -243,7 +323,7 @@ export default function SpinnerPage() {
     if (gwMode) setWinners(prev => [...prev, winner])
     setCurrentWinner(winner)
     spawnConfetti()
-    playWinnerSound()
+    playFireworkSound()
   }
 
   const closeWinner = () => setCurrentWinner(null)
@@ -272,36 +352,27 @@ export default function SpinnerPage() {
             display: 'flex', alignItems: 'center', gap: '8px',
             background: 'transparent', border: 'none',
             color: 'var(--text-dim)', cursor: 'pointer',
-            fontFamily: 'Orbitron, monospace',
-            fontSize: '0.65rem', letterSpacing: '2px',
-            marginBottom: '24px',
-            transition: 'color 0.2s',
+            fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '2px',
+            marginBottom: '24px', transition: 'color 0.2s',
           }}
         >
           ← BACK
         </button>
 
-        <div style={{
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          gap: isMobile ? '24px' : '0',
-        }}>
-          {/* Wheel */}
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '24px' : '0' }}>
+
+          {/* Wheel side */}
           <div style={{
-            flex: 1,
-            display: 'flex', flexDirection: 'column',
+            flex: 1, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
             gap: '24px', paddingRight: isMobile ? '0' : '40px',
           }}>
-            <div style={{
-              fontFamily: 'Orbitron, monospace', fontSize: '0.7rem',
-              letterSpacing: '4px', color: 'rgba(255,255,255,0.4)',
-            }}>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', letterSpacing: '4px', color: 'rgba(255,255,255,0.4)' }}>
               ✦ Spin to select a winner ✦
             </div>
 
             {participants.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
+              <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)' }}>
                 <span style={{ fontSize: '4rem', display: 'block', marginBottom: '16px', opacity: 0.3 }}>🎰</span>
                 <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.8rem', letterSpacing: '2px' }}>
                   Add participants to spin
@@ -329,14 +400,15 @@ export default function SpinnerPage() {
                 />
                 {participants.length <= SLOT_THRESHOLD && (
                   <>
+                    {/* Pointer at right (3 o'clock) */}
                     <div style={{
-                      position: 'absolute', top: '50%', right: -24,
+                      position: 'absolute', top: '50%', right: -28,
                       transform: 'translateY(-50%)',
                       width: 0, height: 0,
-                      borderTop: '18px solid transparent',
-                      borderBottom: '18px solid transparent',
-                      borderRight: '36px solid var(--neon-pink)',
-                      filter: 'drop-shadow(0 0 10px var(--neon-pink))',
+                      borderTop: '16px solid transparent',
+                      borderBottom: '16px solid transparent',
+                      borderRight: '32px solid #ff2d78',
+                      filter: 'drop-shadow(0 0 10px #ff2d78)',
                       zIndex: 10,
                     }} />
                     <div
@@ -344,7 +416,7 @@ export default function SpinnerPage() {
                       style={{
                         position: 'absolute', top: '50%', left: '50%',
                         transform: 'translate(-50%, -50%)',
-                        width: 70, height: 70, borderRadius: '50%',
+                        width: 60, height: 60, borderRadius: '50%',
                         background: 'linear-gradient(135deg, #1a1a2e, #16213e)',
                         border: '3px solid var(--neon-purple)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -353,7 +425,7 @@ export default function SpinnerPage() {
                         boxShadow: '0 0 20px rgba(178,75,255,0.4)',
                       }}
                     >
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff">
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     </div>
@@ -367,12 +439,9 @@ export default function SpinnerPage() {
               disabled={!canSpin}
               style={{
                 padding: '16px 60px',
-                background: canSpin
-                  ? 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))'
-                  : 'rgba(178,75,255,0.2)',
+                background: canSpin ? 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))' : 'rgba(178,75,255,0.2)',
                 border: 'none', borderRadius: '50px', color: '#fff',
-                fontFamily: 'Orbitron, monospace',
-                fontSize: '1rem', fontWeight: 700, letterSpacing: '3px',
+                fontFamily: 'Orbitron, monospace', fontSize: '1rem', fontWeight: 700, letterSpacing: '3px',
                 cursor: canSpin ? 'pointer' : 'not-allowed',
                 boxShadow: canSpin ? '0 0 30px rgba(178,75,255,0.4)' : 'none',
                 transition: 'all 0.3s',
@@ -382,10 +451,7 @@ export default function SpinnerPage() {
             </button>
 
             {spinStatus && (
-              <div style={{
-                fontFamily: 'Orbitron, monospace', fontSize: '0.7rem',
-                letterSpacing: '2px', color: 'var(--text-dim)',
-              }}>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', letterSpacing: '2px', color: 'rgba(255,255,255,0.4)' }}>
                 {spinStatus}
               </div>
             )}
@@ -400,7 +466,8 @@ export default function SpinnerPage() {
             paddingTop: isMobile ? '24px' : '0',
             display: 'flex', flexDirection: 'column', gap: '16px',
           }}>
-            {/* Giveaway mode toggle */}
+
+            {/* Giveaway mode */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '12px',
               padding: '14px 18px',
@@ -408,44 +475,25 @@ export default function SpinnerPage() {
               border: '1px solid rgba(178,75,255,0.15)',
               borderRadius: '14px',
             }}>
-              <span style={{
-                fontFamily: 'Orbitron, monospace', fontSize: '0.6rem',
-                letterSpacing: '2px', color: 'var(--neon-purple)',
-              }}>GIVEAWAY MODE</span>
-              <div
-                onClick={() => { setGwMode(!gwMode); setWinners([]) }}
+              <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.6rem', letterSpacing: '2px', color: '#b24bff' }}>GIVEAWAY MODE</span>
+              <div onClick={() => { setGwMode(!gwMode); setWinners([]) }}
                 style={{
                   width: 40, height: 22, borderRadius: '11px',
-                  background: gwMode ? 'var(--neon-purple)' : 'rgba(255,255,255,0.1)',
-                  border: '1px solid var(--border)',
-                  position: 'relative', cursor: 'pointer',
-                  transition: 'background 0.3s',
-                }}
-              >
+                  background: gwMode ? '#b24bff' : 'rgba(255,255,255,0.1)',
+                  border: '1px solid var(--border)', position: 'relative', cursor: 'pointer', transition: 'background 0.3s',
+                }}>
                 <div style={{
-                  position: 'absolute', top: 3,
-                  left: gwMode ? 19 : 3,
-                  width: 14, height: 14, borderRadius: '50%',
-                  background: '#fff',
-                  transition: 'left 0.3s',
+                  position: 'absolute', top: 3, left: gwMode ? 19 : 3,
+                  width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left 0.3s',
                 }} />
               </div>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                {gwMode ? 'ON' : 'OFF'}
-              </span>
+              <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>{gwMode ? 'ON' : 'OFF'}</span>
             </div>
 
-            {/* Participants input */}
-            <div style={{
-              background: 'var(--dark-card)', border: '1px solid var(--border)',
-              borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)',
-            }}>
-              <div style={{
-                fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-                letterSpacing: '3px', color: 'var(--neon-blue)', marginBottom: '14px',
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-blue)', display: 'inline-block' }} />
+            {/* Participants */}
+            <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)' }}>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: '#00d4ff', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00d4ff', display: 'inline-block' }} />
                 PARTICIPANTS
               </div>
               <textarea
@@ -453,93 +501,58 @@ export default function SpinnerPage() {
                 onChange={e => setInputText(e.target.value)}
                 placeholder={'Enter names, one per line:\nAlice\nBob\nCharlie'}
                 style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  color: '#fff',
-                  fontSize: '0.95rem',
-                  outline: 'none',
-                  resize: 'vertical',
-                  minHeight: '120px',
-                  boxSizing: 'border-box',
+                  width: '100%', background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--border)', borderRadius: '10px',
+                  padding: '12px 16px', color: '#fff', fontSize: '0.95rem',
+                  outline: 'none', resize: 'vertical', minHeight: '120px', boxSizing: 'border-box',
                 }}
+                onFocus={e => e.target.style.borderColor = '#b24bff'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
-              <button
-                onClick={loadParticipants}
+              <button onClick={loadParticipants}
                 style={{
                   width: '100%', padding: '10px', marginTop: '8px',
-                  background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))',
+                  background: 'linear-gradient(135deg, #b24bff, #00d4ff)',
                   border: 'none', borderRadius: '10px', color: '#fff',
-                  fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-                  fontWeight: 700, letterSpacing: '2px', cursor: 'pointer',
-                }}
-              >
+                  fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer',
+                }}>
                 ✔ LOAD PARTICIPANTS
               </button>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '8px' }}>
-                {participants.length} participants
-              </div>
+              <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', marginTop: '8px' }}>{participants.length} participants</div>
             </div>
 
             {/* Prize count */}
             {gwMode && (
-              <div style={{
-                background: 'var(--dark-card)', border: '1px solid var(--border)',
-                borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)',
-              }}>
-                <div style={{
-                  fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-                  letterSpacing: '3px', color: 'var(--neon-blue)', marginBottom: '14px',
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-blue)', display: 'inline-block' }} />
+              <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)' }}>
+                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: '#00d4ff', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00d4ff', display: 'inline-block' }} />
                   PRIZES TO GIVE
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <span style={{
-                    fontFamily: 'Orbitron, monospace', fontSize: '2.5rem',
-                    fontWeight: 900, color: 'var(--neon-purple)',
-                  }}>{prizeCount}</span>
+                  <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '2.5rem', fontWeight: 900, color: '#b24bff' }}>{prizeCount}</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <button onClick={() => setPrizeCount(p => Math.min(participants.length || 10, p + 1))}
                       style={{ width: 30, height: 30, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', cursor: 'pointer' }}>▲</button>
                     <button onClick={() => setPrizeCount(p => Math.max(1, p - 1))}
                       style={{ width: 30, height: 30, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', cursor: 'pointer' }}>▼</button>
                   </div>
-                  <span style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>winners</span>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem' }}>winners</span>
                 </div>
               </div>
             )}
 
             {/* Winners */}
-            <div style={{
-              background: 'var(--dark-card)', border: '1px solid var(--border)',
-              borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)',
-            }}>
-              <div style={{
-                fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-                letterSpacing: '3px', color: 'var(--neon-blue)', marginBottom: '14px',
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-blue)', display: 'inline-block' }} />
+            <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)' }}>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: '#00d4ff', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00d4ff', display: 'inline-block' }} />
                 WINNERS
-                {gwMode && winners.length > 0 && (
-                  <span style={{ color: 'var(--neon-purple)', marginLeft: '4px' }}>({winners.length}/{prizeCount})</span>
-                )}
+                {gwMode && winners.length > 0 && <span style={{ color: '#b24bff', marginLeft: '4px' }}>({winners.length}/{prizeCount})</span>}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                 {winners.length === 0 ? (
-                  <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', textAlign: 'center', padding: '12px' }}>No winners yet</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', textAlign: 'center', padding: '12px' }}>No winners yet</div>
                 ) : winners.map((w, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '9px 12px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '10px',
-                  }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '10px' }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: COLORS[i % COLORS.length], flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: '0.9rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>{w}</span>
                   </div>
@@ -547,14 +560,9 @@ export default function SpinnerPage() {
               </div>
               {gwMode && winners.length >= prizeCount && prizeCount > 0 && (
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <button onClick={shareX}
-                    style={{ flex: 1, padding: '9px', borderRadius: '10px', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', cursor: 'pointer' }}>
-                    🐦 Share
-                  </button>
+                  <button onClick={shareX} style={{ flex: 1, padding: '9px', borderRadius: '10px', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', cursor: 'pointer' }}>🐦 Share</button>
                   <button onClick={() => navigator.clipboard.writeText(`Winners:\n${winners.map((w, i) => `#${i + 1} ${w}`).join('\n')}`)}
-                    style={{ flex: 1, padding: '9px', borderRadius: '10px', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', cursor: 'pointer' }}>
-                    📋 Copy
-                  </button>
+                    style={{ flex: 1, padding: '9px', borderRadius: '10px', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', cursor: 'pointer' }}>📋 Copy</button>
                 </div>
               )}
             </div>
@@ -568,11 +576,8 @@ export default function SpinnerPage() {
       {currentWinner && (
         <div style={{
           position: 'fixed', inset: 0,
-          background: 'rgba(5,5,16,0.92)',
-          backdropFilter: 'blur(20px)',
-          zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '20px',
+          background: 'rgba(5,5,16,0.92)', backdropFilter: 'blur(20px)',
+          zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
         }}>
           <div style={{
             background: 'linear-gradient(135deg, rgba(178,75,255,0.15), rgba(0,212,255,0.1))',
@@ -583,15 +588,12 @@ export default function SpinnerPage() {
             animation: 'winner-appear 0.5s cubic-bezier(0.34,1.56,0.64,1)',
           }}>
             <span style={{ fontSize: '4rem', marginBottom: '16px', display: 'block' }}>🏆</span>
-            <div style={{
-              fontFamily: 'Orbitron, monospace', fontSize: '0.65rem',
-              letterSpacing: '4px', color: 'var(--gold)', marginBottom: '16px',
-            }}>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '4px', color: '#ffd700', marginBottom: '16px' }}>
               {gwMode ? `PRIZE #${winners.length} OF ${prizeCount}` : 'WINNER!'}
             </div>
             <div style={{
               fontFamily: 'Orbitron, monospace', fontSize: isMobile ? '1.4rem' : '1.8rem', fontWeight: 900,
-              background: 'linear-gradient(135deg, var(--gold), #ffed8a)',
+              background: 'linear-gradient(135deg, #ffd700, #ffed8a)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
               marginBottom: '32px',
             }}>
@@ -599,26 +601,12 @@ export default function SpinnerPage() {
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button onClick={closeWinner}
-                style={{
-                  padding: '12px 32px',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '50px', color: 'rgba(255,255,255,0.7)',
-                  fontFamily: 'Orbitron, monospace',
-                  fontSize: '0.75rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer',
-                }}>
+                style={{ padding: '12px 32px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', borderRadius: '50px', color: 'rgba(255,255,255,0.7)', fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
                 Done
               </button>
               {gwMode && remaining > 0 && (
                 <button onClick={nextSpin}
-                  style={{
-                    padding: '12px 32px',
-                    background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))',
-                    border: 'none', borderRadius: '50px', color: '#fff',
-                    fontFamily: 'Orbitron, monospace',
-                    fontSize: '0.75rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer',
-                    boxShadow: '0 0 20px rgba(178,75,255,0.4)',
-                  }}>
+                  style={{ padding: '12px 32px', background: 'linear-gradient(135deg, #b24bff, #00d4ff)', border: 'none', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer', boxShadow: '0 0 20px rgba(178,75,255,0.4)' }}>
                   Next ({remaining} left)
                 </button>
               )}

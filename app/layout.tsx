@@ -4,6 +4,28 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'SuperSpin — Giveaway Platform',
   description: 'Host transparent giveaways with X authentication. Spin the wheel, pick winners live.',
+  openGraph: {
+    title: 'SuperSpin — Giveaway Platform',
+    description: 'Host transparent giveaways with X authentication. Spin the wheel, pick winners live.',
+    url: 'https://superspin.online',
+    siteName: 'SuperSpin',
+    images: [
+      {
+        url: 'https://superspin.online/giveaway-banner.png',
+        width: 1200,
+        height: 630,
+        alt: 'SuperSpin Giveaway Platform',
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'SuperSpin — Giveaway Platform',
+    description: 'Host transparent giveaways with X authentication. Spin the wheel, pick winners live.',
+    images: ['https://superspin.online/giveaway-banner.png'],
+    site: '@superspinonline',
+  },
 }
 
 export const viewport: Viewport = {

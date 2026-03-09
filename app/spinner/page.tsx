@@ -44,15 +44,12 @@ function playSpinSound(duration: number) {
   const startInterval = 0.05
   const endInterval = 0.4
   let elapsed = 0
-
   const scheduleTick = () => {
     if (elapsed >= duration) return
     const progress = elapsed / duration
     const eased = 1 - Math.pow(1 - progress, 2)
     const interval = startInterval + (endInterval - startInterval) * eased
     const volume = Math.min(0.7, 0.3 + (1 - eased) * 0.4)
-
-    // Create tick noise
     const bufferSize = Math.floor(ctx.sampleRate * 0.03)
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
     const data = buffer.getChannelData(0)
@@ -70,7 +67,6 @@ function playSpinSound(duration: number) {
     filter.connect(gain)
     gain.connect(ctx.destination)
     source.start(ctx.currentTime)
-
     elapsed += interval
     setTimeout(scheduleTick, interval * 1000)
   }
@@ -80,8 +76,6 @@ function playSpinSound(duration: number) {
 function playFireworkSound() {
   const ctx = getAudioContext()
   if (!ctx) return
-
-  // Whistle up
   const osc = ctx.createOscillator()
   const oscGain = ctx.createGain()
   osc.connect(oscGain)
@@ -93,8 +87,6 @@ function playFireworkSound() {
   oscGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32)
   osc.start(ctx.currentTime)
   osc.stop(ctx.currentTime + 0.35)
-
-  // Explosion pops
   const delays = [0.3, 0.4, 0.5, 0.65, 0.8]
   delays.forEach((delay, i) => {
     const bufSize = Math.floor(ctx.sampleRate * 0.15)
@@ -115,8 +107,6 @@ function playFireworkSound() {
     g.connect(ctx.destination)
     src.start(ctx.currentTime + delay)
   })
-
-  // Fanfare
   const notes = [523, 659, 784, 1047, 1319]
   notes.forEach((freq, i) => {
     const o = ctx.createOscillator()
@@ -164,33 +154,21 @@ export default function SpinnerPage() {
     const W = canvas.width, H = canvas.height
     const cx = W / 2, cy = H / 2, r = cx - 10
     const n = list.length
-
     ctx.clearRect(0, 0, W, H)
-
     if (n > SLOT_THRESHOLD) {
       ctx.fillStyle = '#050510'
       ctx.fillRect(0, 0, W, H)
-      ctx.fillStyle = 'rgba(255,255,255,0.4)'
-      ctx.font = 'bold 14px Orbitron, monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText(`${n} PARTICIPANTS`, cx, cy - 20)
-      ctx.fillStyle = '#b24bff'
-      ctx.font = 'bold 12px Orbitron, monospace'
-      ctx.fillText('SLOT MODE', cx, cy + 10)
       return
     }
-
     ctx.save()
     ctx.translate(cx, cy)
     ctx.rotate(angle)
     ctx.translate(-cx, -cy)
-
     const sl = (Math.PI * 2) / n
     for (let i = 0; i < n; i++) {
       const start = i * sl - Math.PI / 2
       const end = start + sl
       const mid = start + sl / 2
-
       ctx.beginPath()
       ctx.moveTo(cx, cy)
       ctx.arc(cx, cy, r, start, end)
@@ -199,7 +177,6 @@ export default function SpinnerPage() {
       ctx.strokeStyle = 'rgba(0,0,0,0.4)'
       ctx.lineWidth = 2
       ctx.stroke()
-
       ctx.save()
       ctx.translate(cx, cy)
       ctx.rotate(mid)
@@ -210,7 +187,6 @@ export default function SpinnerPage() {
       ctx.fillText(list[i].slice(0, 14), r - 10, 5)
       ctx.restore()
     }
-
     ctx.beginPath()
     ctx.arc(cx, cy, 28, 0, Math.PI * 2)
     ctx.fillStyle = '#050510'
@@ -218,9 +194,92 @@ export default function SpinnerPage() {
     ctx.strokeStyle = 'rgba(178,75,255,0.5)'
     ctx.lineWidth = 2
     ctx.stroke()
-
     ctx.restore()
   }, [])
+
+  const drawSlotMachine = useCallback((list: string[], scrollY: number, winner: string, finished: boolean) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    const W = canvas.width, H = canvas.height
+    const cx = W / 2
+    const itemH = 56
+
+    ctx.clearRect(0, 0, W, H)
+    ctx.fillStyle = '#050510'
+    ctx.fillRect(0, 0, W, H)
+
+    // Border
+    ctx.strokeStyle = 'rgba(178,75,255,0.3)'
+    ctx.lineWidth = 2
+    ctx.strokeRect(1, 1, W - 2, H - 2)
+
+    if (finished) {
+      // Final state - show winner centered
+      ctx.fillStyle = 'rgba(178,75,255,0.12)'
+      ctx.fillRect(0, H / 2 - itemH / 2, W, itemH)
+      ctx.strokeStyle = 'rgba(178,75,255,0.6)'
+      ctx.lineWidth = 2
+      ctx.strokeRect(0, H / 2 - itemH / 2, W, itemH)
+      ctx.fillStyle = '#b24bff'
+      ctx.font = `bold ${isMobile ? '20px' : '24px'} Orbitron, monospace`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(winner.slice(0, 18), cx, H / 2)
+      return
+    }
+
+    // Center highlight band
+    ctx.fillStyle = 'rgba(178,75,255,0.08)'
+    ctx.fillRect(0, H / 2 - itemH / 2, W, itemH)
+    ctx.strokeStyle = 'rgba(178,75,255,0.4)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(0, H / 2 - itemH / 2, W, itemH)
+
+    // Draw scrolling names
+    const startIdx = Math.floor(scrollY / itemH)
+    const offsetY = -(scrollY % itemH)
+
+    for (let i = -1; i <= Math.ceil(H / itemH) + 1; i++) {
+      const idx = Math.abs((startIdx + i) % list.length)
+      const name = list[idx]
+      const y = offsetY + i * itemH + H / 2 - itemH / 2
+
+      const distFromCenter = Math.abs(y + itemH / 2 - H / 2)
+      const alpha = Math.max(0.08, 1 - (distFromCenter / (H / 2)) * 1.3)
+      const scale = Math.max(0.65, 1 - (distFromCenter / (H / 2)) * 0.45)
+
+      ctx.save()
+      ctx.translate(cx, y + itemH / 2)
+      ctx.scale(scale, scale)
+      ctx.globalAlpha = alpha
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+
+      if (distFromCenter < itemH / 2) {
+        ctx.fillStyle = '#ffffff'
+        ctx.font = `bold ${isMobile ? '18px' : '22px'} Orbitron, monospace`
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.8)'
+        ctx.font = `bold ${isMobile ? '15px' : '18px'} Rajdhani, sans-serif`
+      }
+      ctx.fillText(name.slice(0, 18), 0, 0)
+      ctx.restore()
+    }
+
+    // Gradient overlays top/bottom
+    const topGrad = ctx.createLinearGradient(0, 0, 0, H * 0.38)
+    topGrad.addColorStop(0, 'rgba(5,5,16,1)')
+    topGrad.addColorStop(1, 'rgba(5,5,16,0)')
+    ctx.fillStyle = topGrad
+    ctx.fillRect(0, 0, W, H * 0.38)
+
+    const botGrad = ctx.createLinearGradient(0, H * 0.62, 0, H)
+    botGrad.addColorStop(0, 'rgba(5,5,16,0)')
+    botGrad.addColorStop(1, 'rgba(5,5,16,1)')
+    ctx.fillStyle = botGrad
+    ctx.fillRect(0, H * 0.62, W, H * 0.38)
+  }, [isMobile])
 
   const loadParticipants = () => {
     const list = inputText.split('\n').map(s => s.trim()).filter(Boolean)
@@ -241,7 +300,6 @@ export default function SpinnerPage() {
 
     spinningRef.current = true
     setSpinStatus('Spinning...')
-
     const winner = eligible[Math.floor(Math.random() * eligible.length)]
 
     if (participants.length <= SLOT_THRESHOLD) {
@@ -254,9 +312,7 @@ export default function SpinnerPage() {
       const start = angleRef.current
       const t0 = Date.now()
       const dur = 4500
-
       playSpinSound(dur / 1000)
-
       const anim = () => {
         const progress = Math.min((Date.now() - t0) / dur, 1)
         const eased = 1 - Math.pow(1 - progress, 4)
@@ -273,37 +329,37 @@ export default function SpinnerPage() {
       }
       requestAnimationFrame(anim)
     } else {
-      let count = 0
-      const max = 25 + Math.floor(Math.random() * 15)
+      // Slot machine - scrolling column
       const canvas = canvasRef.current!
-      const ctx = canvas.getContext('2d')!
+      const H = canvas.height
+      const itemH = 56
+      let scrollY = 0
+      let speed = 30
+      const minSpeed = 1.2
+      const totalItems = eligible.length
 
-      const tick = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.fillStyle = '#050510'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        const r = eligible[Math.floor(Math.random() * eligible.length)]
-        ctx.fillStyle = COLORS[Math.floor(Math.random() * COLORS.length)]
-        ctx.font = 'bold 20px Rajdhani, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.fillText(r.slice(0, 16), canvas.width / 2, canvas.height / 2)
+      playSpinSound(3.5)
 
-        if (++count < max) {
-          setTimeout(tick, 60 + count * 4)
+      const animateSlot = () => {
+        scrollY += speed
+        // Decelerate smoothly
+        if (speed > minSpeed) {
+          speed = Math.max(minSpeed, speed * 0.975)
+        }
+
+        drawSlotMachine(eligible, scrollY, winner, false)
+
+        if (speed > minSpeed + 0.1) {
+          requestAnimationFrame(animateSlot)
         } else {
-          ctx.clearRect(0, 0, canvas.width, canvas.height)
-          ctx.fillStyle = '#050510'
-          ctx.fillRect(0, 0, canvas.width, canvas.height)
-          ctx.fillStyle = '#b24bff'
-          ctx.font = 'bold 22px Orbitron, monospace'
-          ctx.textAlign = 'center'
-          ctx.fillText(winner.slice(0, 14), canvas.width / 2, canvas.height / 2)
+          // Snap to winner centered
+          drawSlotMachine(eligible, scrollY, winner, true)
           spinningRef.current = false
           setSpinStatus('')
-          setTimeout(() => showWinner(winner), 400)
+          setTimeout(() => showWinner(winner), 600)
         }
       }
-      tick()
+      animateSlot()
     }
   }
 
@@ -349,7 +405,7 @@ export default function SpinnerPage() {
 
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '24px' : '0' }}>
 
-          {/* Wheel */}
+          {/* Wheel / Slot */}
           <div style={{
             flex: 1, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
@@ -369,7 +425,7 @@ export default function SpinnerPage() {
             ) : (
               <div style={{ position: 'relative', width: canvasSize, height: canvasSize }}>
                 <div style={{
-                  position: 'absolute', inset: -20, borderRadius: '50%',
+                  position: 'absolute', inset: -20, borderRadius: participants.length > SLOT_THRESHOLD ? '24px' : '50%',
                   background: 'radial-gradient(circle, rgba(178,75,255,0.2) 0%, transparent 70%)',
                   animation: 'pulse-glow 2s ease-in-out infinite',
                   pointerEvents: 'none',
@@ -453,31 +509,15 @@ export default function SpinnerPage() {
             paddingTop: isMobile ? '24px' : '0',
             display: 'flex', flexDirection: 'column', gap: '16px',
           }}>
-
-            {/* Giveaway mode */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              padding: '14px 18px',
-              background: 'rgba(178,75,255,0.06)',
-              border: '1px solid rgba(178,75,255,0.15)',
-              borderRadius: '14px',
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 18px', background: 'rgba(178,75,255,0.06)', border: '1px solid rgba(178,75,255,0.15)', borderRadius: '14px' }}>
               <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.6rem', letterSpacing: '2px', color: '#b24bff' }}>GIVEAWAY MODE</span>
               <div onClick={() => { setGwMode(!gwMode); setWinners([]) }}
-                style={{
-                  width: 40, height: 22, borderRadius: '11px',
-                  background: gwMode ? '#b24bff' : 'rgba(255,255,255,0.1)',
-                  border: '1px solid var(--border)', position: 'relative', cursor: 'pointer', transition: 'background 0.3s',
-                }}>
-                <div style={{
-                  position: 'absolute', top: 3, left: gwMode ? 19 : 3,
-                  width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left 0.3s',
-                }} />
+                style={{ width: 40, height: 22, borderRadius: '11px', background: gwMode ? '#b24bff' : 'rgba(255,255,255,0.1)', border: '1px solid var(--border)', position: 'relative', cursor: 'pointer', transition: 'background 0.3s' }}>
+                <div style={{ position: 'absolute', top: 3, left: gwMode ? 19 : 3, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left 0.3s' }} />
               </div>
               <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>{gwMode ? 'ON' : 'OFF'}</span>
             </div>
 
-            {/* Participants */}
             <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)' }}>
               <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: '#00d4ff', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00d4ff', display: 'inline-block' }} />
@@ -487,28 +527,17 @@ export default function SpinnerPage() {
                 value={inputText}
                 onChange={e => setInputText(e.target.value)}
                 placeholder={'Enter names, one per line:\nAlice\nBob\nCharlie'}
-                style={{
-                  width: '100%', background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--border)', borderRadius: '10px',
-                  padding: '12px 16px', color: '#fff', fontSize: '0.95rem',
-                  outline: 'none', resize: 'vertical', minHeight: '120px', boxSizing: 'border-box',
-                }}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 16px', color: '#fff', fontSize: '0.95rem', outline: 'none', resize: 'vertical', minHeight: '120px', boxSizing: 'border-box' }}
                 onFocus={e => e.target.style.borderColor = '#b24bff'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
               <button onClick={loadParticipants}
-                style={{
-                  width: '100%', padding: '10px', marginTop: '8px',
-                  background: 'linear-gradient(135deg, #b24bff, #00d4ff)',
-                  border: 'none', borderRadius: '10px', color: '#fff',
-                  fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer',
-                }}>
+                style={{ width: '100%', padding: '10px', marginTop: '8px', background: 'linear-gradient(135deg, #b24bff, #00d4ff)', border: 'none', borderRadius: '10px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
                 ✔ LOAD PARTICIPANTS
               </button>
               <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', marginTop: '8px' }}>{participants.length} participants</div>
             </div>
 
-            {/* Prize count */}
             {gwMode && (
               <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)' }}>
                 <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: '#00d4ff', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -528,7 +557,6 @@ export default function SpinnerPage() {
               </div>
             )}
 
-            {/* Winners */}
             <div style={{ background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '20px', backdropFilter: 'blur(10px)' }}>
               <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '3px', color: '#00d4ff', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00d4ff', display: 'inline-block' }} />
@@ -560,11 +588,7 @@ export default function SpinnerPage() {
       <Footer />
 
       {currentWinner && (
-        <div style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(5,5,16,0.92)', backdropFilter: 'blur(20px)',
-          zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
-        }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.92)', backdropFilter: 'blur(20px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{
             background: 'linear-gradient(135deg, rgba(178,75,255,0.15), rgba(0,212,255,0.1))',
             border: '1px solid rgba(178,75,255,0.4)',
@@ -577,12 +601,7 @@ export default function SpinnerPage() {
             <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '4px', color: '#ffd700', marginBottom: '16px' }}>
               {gwMode ? `PRIZE #${winners.length} OF ${prizeCount}` : 'WINNER!'}
             </div>
-            <div style={{
-              fontFamily: 'Orbitron, monospace', fontSize: isMobile ? '1.4rem' : '1.8rem', fontWeight: 900,
-              background: 'linear-gradient(135deg, #ffd700, #ffed8a)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              marginBottom: '32px',
-            }}>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: isMobile ? '1.4rem' : '1.8rem', fontWeight: 900, background: 'linear-gradient(135deg, #ffd700, #ffed8a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', marginBottom: '32px' }}>
               {currentWinner}
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>

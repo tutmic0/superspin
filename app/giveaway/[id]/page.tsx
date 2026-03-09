@@ -161,13 +161,15 @@ export default function GiveawayPage() {
   const [joining, setJoining] = useState(false)
   const [hasJoined, setHasJoined] = useState(false)
   const [showRequirements, setShowRequirements] = useState(false)
-  const [reqStep, setReqStep] = useState(0) // which requirement we're on
+  const [reqStep, setReqStep] = useState(0)
   const [reqDone, setReqDone] = useState(false)
   const [countdown, setCountdown] = useState('')
   const [currentWinner, setCurrentWinner] = useState<(Participant & { prizeNum: number }) | null>(null)
   const [allWinnersModal, setAllWinnersModal] = useState(false)
   const [isSpinSequenceRunning, setIsSpinSequenceRunning] = useState(false)
   const [winnersQueue, setWinnersQueue] = useState<Winner[]>([])
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null))
@@ -279,14 +281,12 @@ export default function GiveawayPage() {
     const W = canvas.width, H = canvas.height
     const cx = W / 2
     const itemH = 56
-
     ctx.clearRect(0, 0, W, H)
     ctx.fillStyle = '#050510'
     ctx.fillRect(0, 0, W, H)
     ctx.strokeStyle = 'rgba(178,75,255,0.3)'
     ctx.lineWidth = 2
     ctx.strokeRect(1, 1, W - 2, H - 2)
-
     if (finished) {
       ctx.fillStyle = 'rgba(178,75,255,0.12)'
       ctx.fillRect(0, H / 2 - itemH / 2, W, itemH)
@@ -300,16 +300,13 @@ export default function GiveawayPage() {
       ctx.fillText(('@' + winner).slice(0, 18), cx, H / 2)
       return
     }
-
     ctx.fillStyle = 'rgba(178,75,255,0.08)'
     ctx.fillRect(0, H / 2 - itemH / 2, W, itemH)
     ctx.strokeStyle = 'rgba(178,75,255,0.4)'
     ctx.lineWidth = 1
     ctx.strokeRect(0, H / 2 - itemH / 2, W, itemH)
-
     const startIdx = Math.floor(scrollY / itemH)
     const offsetY = -(scrollY % itemH)
-
     for (let i = -1; i <= Math.ceil(H / itemH) + 1; i++) {
       const idx = Math.abs((startIdx + i) % list.length)
       const name = list[idx]
@@ -317,7 +314,6 @@ export default function GiveawayPage() {
       const distFromCenter = Math.abs(y + itemH / 2 - H / 2)
       const alpha = Math.max(0.08, 1 - (distFromCenter / (H / 2)) * 1.3)
       const scale = Math.max(0.65, 1 - (distFromCenter / (H / 2)) * 0.45)
-
       ctx.save()
       ctx.translate(cx, y + itemH / 2)
       ctx.scale(scale, scale)
@@ -334,13 +330,11 @@ export default function GiveawayPage() {
       ctx.fillText(('@' + name).slice(0, 18), 0, 0)
       ctx.restore()
     }
-
     const topGrad = ctx.createLinearGradient(0, 0, 0, H * 0.38)
     topGrad.addColorStop(0, 'rgba(5,5,16,1)')
     topGrad.addColorStop(1, 'rgba(5,5,16,0)')
     ctx.fillStyle = topGrad
     ctx.fillRect(0, 0, W, H * 0.38)
-
     const botGrad = ctx.createLinearGradient(0, H * 0.62, 0, H)
     botGrad.addColorStop(0, 'rgba(5,5,16,0)')
     botGrad.addColorStop(1, 'rgba(5,5,16,1)')
@@ -357,7 +351,6 @@ export default function GiveawayPage() {
   const spinForWinner = (eligible: Participant[]): Promise<Participant> => {
     return new Promise(resolve => {
       const winner = eligible[Math.floor(Math.random() * eligible.length)]
-
       if (eligible.length <= SLOT_THRESHOLD) {
         const idx = eligible.findIndex(p => p.user_id === winner.user_id)
         const n = eligible.length
@@ -380,7 +373,6 @@ export default function GiveawayPage() {
         }
         requestAnimationFrame(anim)
       } else {
-        // Slot machine — scroll to exact winner position
         const itemH = 56
         const displayList: string[] = []
         for (let i = 0; i < 60; i++) {
@@ -390,7 +382,6 @@ export default function GiveawayPage() {
         const targetScrollY = (displayList.length - 1) * itemH
         let scrollY = 0
         playSpinSound(3.5)
-
         const animateSlot = () => {
           const remaining = targetScrollY - scrollY
           if (remaining <= 0.5) {
@@ -431,7 +422,7 @@ export default function GiveawayPage() {
     return new Promise(resolve => {
       const recorder = mediaRecorderRef.current
       const stream = streamRef.current
-      if (!recorder) { resolve(null); return }
+      if (!recorder || recorder.state === 'inactive') { resolve(null); return }
       recorder.onstop = () => {
         const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
         stream?.getTracks().forEach(t => t.stop())
@@ -439,6 +430,15 @@ export default function GiveawayPage() {
       }
       recorder.stop()
     })
+  }
+
+  const downloadVideo = (blob: Blob) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `superspin-${giveaway?.title?.replace(/\s+/g, '-') || 'giveaway'}.webm`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const startSpinSequence = async () => {
@@ -485,13 +485,27 @@ export default function GiveawayPage() {
     setGiveaway(prev => prev ? { ...prev, status: 'ended' } : prev)
 
     setWinnersQueue(allWinners)
+    if (videoBlob) setRecordedBlob(videoBlob)
     setAllWinnersModal(true)
     spinningRef.current = false
     setIsSpinSequenceRunning(false)
+  }
 
-    if (videoBlob) {
-      console.log('Video ready for upload:', videoBlob.size, 'bytes')
-    }
+  const shareResults = (w: Winner[]) => {
+    const reward = giveaway?.description ? `\n🎁 Reward: ${giveaway.description}` : ''
+    const winnerLines = w.length === 1
+      ? `🏆 Winner: @${w[0].username}`
+      : w.map((win, i) => `🏆 #${i + 1} @${win.username}`).join('\n')
+    const text = [
+      `🎉 Giveaway results for "${giveaway?.title}"!`,
+      ``,
+      winnerLines,
+      reward,
+      ``,
+      `Powered by superspin.online`,
+      `${window.location.origin}/giveaway/${id}`,
+    ].join('\n')
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank')
   }
 
   const handleJoin = async () => {
@@ -544,7 +558,6 @@ export default function GiveawayPage() {
     if (req.type === 'follow') {
       window.open(`https://twitter.com/intent/follow?screen_name=${req.username}`, '_blank')
     }
-    // like and reply are honor system — just mark as done
     setTimeout(() => {
       const reqs = giveaway?.requirements || []
       if (reqStep + 1 >= reqs.length) {
@@ -553,6 +566,23 @@ export default function GiveawayPage() {
         setReqStep(reqStep + 1)
       }
     }, req.type === 'follow' ? 1500 : 300)
+  }
+
+  const shareResults = (w: Winner[]) => {
+    const reward = giveaway?.description ? `\n🎁 Reward: ${giveaway.description}` : ''
+    const winnerLines = w.length === 1
+      ? `🏆 Winner: @${w[0].username}`
+      : w.map((win, i) => `🏆 #${i + 1} @${win.username}`).join('\n')
+    const text = [
+      `🎉 Giveaway results for "${giveaway?.title}"!`,
+      ``,
+      winnerLines,
+      reward,
+      ``,
+      `Powered by superspin.online`,
+      `${window.location.origin}/giveaway/${id}`,
+    ].join('\n')
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank')
   }
 
   if (loading) {
@@ -578,8 +608,7 @@ export default function GiveawayPage() {
       <Navbar />
       <main style={{ flex: 1, padding: isMobile ? '20px 16px' : '40px', maxWidth: 1300, margin: '0 auto', width: '100%' }}>
 
-        <button
-          onClick={() => router.push('/')}
+        <button onClick={() => router.push('/')}
           style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '2px', marginBottom: isMobile ? '20px' : '32px', transition: 'color 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.color = '#fff'}
           onMouseLeave={e => e.currentTarget.style.color = 'var(--text-dim)'}
@@ -599,47 +628,25 @@ export default function GiveawayPage() {
             {giveaway.title}
           </h1>
           {giveaway.description && (
-            <p style={{ color: 'var(--text-dim)', lineHeight: 1.7, maxWidth: 600 }}>{giveaway.description}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.1rem' }}>🎁</span>
+              <span style={{ color: 'var(--neon-purple)', fontWeight: 700, fontSize: '1rem' }}>{giveaway.description}</span>
+            </div>
           )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 360px', gap: isMobile ? '24px' : '40px' }}>
 
-          {/* Wheel / Slot */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? '20px' : '28px' }}>
-
             <div style={{ position: 'relative' }}>
-              <div style={{
-                position: 'absolute', inset: -20,
-                borderRadius: useSlots ? '24px' : '50%',
-                background: 'radial-gradient(circle, rgba(178,75,255,0.2), transparent 70%)',
-                animation: 'pulse-glow 2s ease-in-out infinite',
-                pointerEvents: 'none',
-              }} />
-              <canvas
-                ref={canvasRef}
-                width={isMobile ? 300 : 380}
-                height={isMobile ? 300 : 380}
-                style={{
-                  borderRadius: useSlots ? '20px' : '50%',
-                  filter: 'drop-shadow(0 0 30px rgba(178,75,255,0.5)) drop-shadow(0 0 60px rgba(0,212,255,0.2))',
-                }}
-              />
+              <div style={{ position: 'absolute', inset: -20, borderRadius: useSlots ? '24px' : '50%', background: 'radial-gradient(circle, rgba(178,75,255,0.2), transparent 70%)', animation: 'pulse-glow 2s ease-in-out infinite', pointerEvents: 'none' }} />
+              <canvas ref={canvasRef} width={isMobile ? 300 : 380} height={isMobile ? 300 : 380}
+                style={{ borderRadius: useSlots ? '20px' : '50%', filter: 'drop-shadow(0 0 30px rgba(178,75,255,0.5)) drop-shadow(0 0 60px rgba(0,212,255,0.2))' }} />
               {!useSlots && (
-                <div style={{
-                  position: 'absolute', top: '50%', right: isMobile ? -18 : -22,
-                  transform: 'translateY(-50%)',
-                  width: 0, height: 0,
-                  borderTop: `${isMobile ? 12 : 16}px solid transparent`,
-                  borderBottom: `${isMobile ? 12 : 16}px solid transparent`,
-                  borderRight: `${isMobile ? 24 : 30}px solid #ff2d78`,
-                  filter: 'drop-shadow(0 0 10px #ff2d78)',
-                  zIndex: 10,
-                }} />
+                <div style={{ position: 'absolute', top: '50%', right: isMobile ? -18 : -22, transform: 'translateY(-50%)', width: 0, height: 0, borderTop: `${isMobile ? 12 : 16}px solid transparent`, borderBottom: `${isMobile ? 12 : 16}px solid transparent`, borderRight: `${isMobile ? 24 : 30}px solid #ff2d78`, filter: 'drop-shadow(0 0 10px #ff2d78)', zIndex: 10 }} />
               )}
             </div>
 
-            {/* Countdown */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 28px', background: 'var(--dark-card)', border: '1px solid var(--border)', borderRadius: '16px', backdropFilter: 'blur(10px)' }}>
               <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '2px', color: 'var(--text-dim)' }}>TIME LEFT</span>
               <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '1.5rem', fontWeight: 700, color: 'var(--neon-blue)', textShadow: '0 0 20px rgba(0,212,255,0.5)' }}>
@@ -670,16 +677,12 @@ export default function GiveawayPage() {
             )}
 
             {isSpinSequenceRunning && (
-              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', letterSpacing: '3px', color: 'var(--neon-purple)' }}>
-                SPINNING...
-              </div>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', letterSpacing: '3px', color: 'var(--neon-purple)' }}>SPINNING...</div>
             )}
 
             {!isOrg && isActive && (
               hasJoined ? (
-                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', letterSpacing: '2px', color: 'var(--neon-green)', textShadow: '0 0 15px rgba(0,255,136,0.5)' }}>
-                  ✔ YOU'RE IN!
-                </div>
+                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', letterSpacing: '2px', color: 'var(--neon-green)', textShadow: '0 0 15px rgba(0,255,136,0.5)' }}>✔ YOU'RE IN!</div>
               ) : (
                 <button onClick={handleJoin} disabled={joining} style={{ padding: '14px 40px', background: 'linear-gradient(135deg, var(--neon-green), #00b4d8)', border: 'none', borderRadius: '50px', color: '#000', fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '2px', cursor: joining ? 'not-allowed' : 'pointer', boxShadow: '0 0 30px rgba(0,255,136,0.3)', opacity: joining ? 0.7 : 1 }}>
                   {joining ? 'JOINING...' : user ? '🎪 JOIN GIVEAWAY' : '🐦 LOGIN & JOIN'}
@@ -688,14 +691,8 @@ export default function GiveawayPage() {
             )}
 
             {isEnded && winnersQueue.length > 0 && (
-              <button
-                onClick={() => {
-                  const winnersList = winnersQueue.map(w => `@${w.username}`).join(', ')
-                  const text = `🎉 Winners of "${giveaway.title}": ${winnersList}\n\nHosted on @superspinonline`
-                  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank')
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '50px', color: '#fff', fontSize: '0.9rem', cursor: 'pointer' }}
-              >
+              <button onClick={() => shareResults(winnersQueue)}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '50px', color: '#fff', fontSize: '0.9rem', cursor: 'pointer' }}>
                 🐦 Share Results
               </button>
             )}
@@ -794,52 +791,40 @@ export default function GiveawayPage() {
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={() => {
-                  const winnersList = winnersQueue.map(w => `@${w.username}`).join(', ')
-                  const text = `🎉 Winners of "${giveaway.title}": ${winnersList}\n\nHosted on @superspinonline`
-                  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank')
-                }}
-                style={{ padding: '12px 28px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => shareResults(winnersQueue)}
+                style={{ padding: '12px 24px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
                 🐦 Share
               </button>
-              <button
-                onClick={() => { setAllWinnersModal(false); router.push('/') }}
-                style={{ padding: '12px 28px', background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))', border: 'none', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer', boxShadow: '0 0 20px rgba(178,75,255,0.4)' }}>
+              {recordedBlob && (
+                <button onClick={() => downloadVideo(recordedBlob)}
+                  style={{ padding: '12px 24px', background: 'rgba(255,45,120,0.1)', border: '1px solid rgba(255,45,120,0.35)', borderRadius: '50px', color: '#ff2d78', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer' }}>
+                  ⬇ Download Video
+                </button>
+              )}
+              <button onClick={() => { setAllWinnersModal(false); router.push('/') }}
+                style={{ padding: '12px 24px', background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-blue))', border: 'none', borderRadius: '50px', color: '#fff', fontFamily: 'Orbitron, monospace', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', cursor: 'pointer', boxShadow: '0 0 20px rgba(178,75,255,0.4)' }}>
                 CLOSE
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* Requirements modal */}
+
       {showRequirements && giveaway && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.95)', backdropFilter: 'blur(20px)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: 'linear-gradient(135deg, rgba(178,75,255,0.15), rgba(0,212,255,0.08))', border: '1px solid rgba(178,75,255,0.35)', borderRadius: '28px', padding: isMobile ? '32px 24px' : '48px', maxWidth: 460, width: '100%', boxShadow: '0 0 80px rgba(178,75,255,0.25)' }}>
             <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.65rem', letterSpacing: '4px', color: '#00d4ff', marginBottom: '8px' }}>TO ENTER</div>
             <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '1.2rem', fontWeight: 900, color: '#fff', marginBottom: '28px' }}>Complete the steps</div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
               {(giveaway.requirements || []).map((req, i) => {
                 const isDone = reqDone || i < reqStep
                 const isCurrent = !reqDone && i === reqStep
                 const label = req.type === 'follow' ? `Follow @${req.username}` : req.type === 'like' ? '❤️ Like the giveaway post' : '💬 Reply to the giveaway post'
                 const icon = req.type === 'follow' ? '👤' : req.type === 'like' ? '❤️' : '💬'
-
                 return (
-                  <div key={i}
-                    onClick={() => isCurrent && handleReqAction(req)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '14px',
-                      padding: '14px 18px',
-                      background: isDone ? 'rgba(0,255,136,0.06)' : isCurrent ? 'rgba(178,75,255,0.1)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${isDone ? 'rgba(0,255,136,0.3)' : isCurrent ? 'rgba(178,75,255,0.4)' : 'var(--border)'}`,
-                      borderRadius: '14px',
-                      cursor: isCurrent ? 'pointer' : 'default',
-                      transition: 'all 0.2s',
-                    }}
-                  >
+                  <div key={i} onClick={() => isCurrent && handleReqAction(req)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px', background: isDone ? 'rgba(0,255,136,0.06)' : isCurrent ? 'rgba(178,75,255,0.1)' : 'rgba(255,255,255,0.02)', border: `1px solid ${isDone ? 'rgba(0,255,136,0.3)' : isCurrent ? 'rgba(178,75,255,0.4)' : 'var(--border)'}`, borderRadius: '14px', cursor: isCurrent ? 'pointer' : 'default', transition: 'all 0.2s' }}>
                     <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: isDone ? 'rgba(0,255,136,0.2)' : isCurrent ? 'rgba(178,75,255,0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
                       {isDone ? '✓' : icon}
                     </div>
@@ -850,11 +835,8 @@ export default function GiveawayPage() {
                 )
               })}
             </div>
-
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => reqDone ? doJoin() : undefined}
-                disabled={!reqDone}
+              <button onClick={() => reqDone ? doJoin() : undefined} disabled={!reqDone}
                 style={{ flex: 1, padding: '14px', background: reqDone ? 'linear-gradient(135deg, #00ff88, #00b4d8)' : 'rgba(255,255,255,0.05)', border: reqDone ? 'none' : '1px solid var(--border)', borderRadius: '12px', color: reqDone ? '#000' : 'rgba(255,255,255,0.3)', fontFamily: 'Orbitron, monospace', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '2px', cursor: reqDone ? 'pointer' : 'not-allowed', transition: 'all 0.3s', boxShadow: reqDone ? '0 0 25px rgba(0,255,136,0.3)' : 'none' }}>
                 ✓ JOIN GIVEAWAY
               </button>

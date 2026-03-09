@@ -88,7 +88,7 @@ function playFireworkSound() {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
     
     // Multiple explosion pops
-    [0, 0.1, 0.25, 0.4, 0.6].forEach((delay, i) => {
+    ([0, 0.1, 0.25, 0.4, 0.6] as number[]).forEach((delay: number, i: number) => {
       const bufferSize = ctx.sampleRate * 0.15
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
       const data = buffer.getChannelData(0)

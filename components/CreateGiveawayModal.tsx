@@ -13,13 +13,12 @@ interface Props {
 
 export default function CreateGiveawayModal({ user, onClose, onCreated }: Props) {
   const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
+  const [reward, setReward] = useState('')
   const [winnerCount, setWinnerCount] = useState(1)
   const [hours, setHours] = useState(24)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Requirements
   const [followUsernames, setFollowUsernames] = useState<string[]>([
     user.user_metadata?.user_name || ''
   ])
@@ -48,7 +47,7 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
       const ends_at = new Date(Date.now() + hours * 3600000).toISOString()
       const giveaway = await createGiveaway({
         title: title.trim(),
-        description: description.trim(),
+        description: reward.trim(), // reuse description field for reward
         winner_count: winnerCount,
         ends_at,
         organizer_id: user.id,
@@ -64,9 +63,23 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
         reqReply ? '• Reply to this post' : '',
       ].filter(Boolean).join('\n')
 
-      const tweetText = `🎰 I'm hosting a giveaway on @superspinonline!\n\n${title}${description ? `\n${description}` : ''}\n\n🏆 ${winnerCount} winner${winnerCount > 1 ? 's' : ''}\n\nTo enter:\n${reqLines}\n\nJoin 👉 ${window.location.origin}/giveaway/${giveaway.id}`
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank')
+      const tweetParts = [
+        `🎰 I'm hosting a giveaway on @superspinonline!`,
+        ``,
+        title.trim(),
+        reward.trim() ? `🎁 Reward: ${reward.trim()}` : null,
+        `🏆 ${winnerCount} winner${winnerCount > 1 ? 's' : ''}`,
+      ]
 
+      if (reqLines) {
+        tweetParts.push(``, `To enter:`, reqLines)
+      }
+
+      tweetParts.push(``, `Join 👉 ${window.location.origin}/giveaway/${giveaway.id}`)
+
+      const tweetText = tweetParts.filter(l => l !== null).join('\n')
+
+      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank')
       onCreated(giveaway.id)
     } catch (e) {
       setError('Failed to create giveaway. Please try again.')
@@ -120,16 +133,8 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
             onBlur={e => e.target.style.borderColor = 'var(--border)'} />
         </div>
 
-        {/* Description */}
-        <div style={{ marginBottom: '20px' }}>
-          <label style={labelStyle}>Description</label>
-          <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} placeholder="Describe the prize..." value={description} onChange={e => setDescription(e.target.value)}
-            onFocus={e => e.target.style.borderColor = 'var(--neon-purple)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-        </div>
-
-        {/* Winners + Duration */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+        {/* Winners + Duration + Reward */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
           <div>
             <label style={labelStyle}>Winners</label>
             <select style={{ ...inputStyle, cursor: 'pointer' }} value={winnerCount} onChange={e => setWinnerCount(Number(e.target.value))}>
@@ -146,11 +151,18 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
           </div>
         </div>
 
+        {/* Reward */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={labelStyle}>🎁 Reward</label>
+          <input style={inputStyle} placeholder="e.g. 100$, 3 NFT, PS5..." maxLength={60} value={reward} onChange={e => setReward(e.target.value)}
+            onFocus={e => e.target.style.borderColor = 'var(--neon-purple)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+        </div>
+
         {/* Requirements */}
         <div style={{ marginBottom: '24px' }}>
           <label style={labelStyle}>Entry Requirements</label>
 
-          {/* Follow fields */}
           <div style={{ marginBottom: '10px' }}>
             <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>👤 Follow on X</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -181,7 +193,6 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
             </div>
           </div>
 
-          {/* Like + Reply */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
             <CheckRow checked={reqLike} onChange={() => setReqLike(!reqLike)} label="❤️ Like the giveaway post" sublabel="Optional — participants will know which post" />
             <CheckRow checked={reqReply} onChange={() => setReqReply(!reqReply)} label="💬 Reply to the giveaway post" sublabel="Optional — participants will know which post" />

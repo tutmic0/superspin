@@ -169,7 +169,6 @@ export default function GiveawayPage() {
   const [isSpinSequenceRunning, setIsSpinSequenceRunning] = useState(false)
   const [winnersQueue, setWinnersQueue] = useState<Winner[]>([])
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null))

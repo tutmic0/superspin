@@ -29,115 +29,108 @@ function spawnConfetti() {
   }
 }
 
-// Realistic wheel tick sound
-function createTickSound(audioCtx: AudioContext, time: number, volume: number) {
-  const bufferSize = audioCtx.sampleRate * 0.03
-  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate)
-  const data = buffer.getChannelData(0)
-  for (let i = 0; i < bufferSize; i++) {
-    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1))
+function getAudioContext(): AudioContext | null {
+  try {
+    const AC = (window.AudioContext || (window as any).webkitAudioContext)
+    return new AC()
+  } catch (e) {
+    return null
   }
-  const source = audioCtx.createBufferSource()
-  source.buffer = buffer
-  const gain = audioCtx.createGain()
-  gain.gain.setValueAtTime(volume, time)
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.03)
-  const filter = audioCtx.createBiquadFilter()
-  filter.type = 'bandpass'
-  filter.frequency.value = 800
-  filter.Q.value = 0.5
-  source.connect(filter)
-  filter.connect(gain)
-  gain.connect(audioCtx.destination)
-  source.start(time)
-  source.stop(time + 0.03)
 }
 
-function playSpinSound(duration: number, onStop: () => void) {
-  try {
-    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext
-const ctx = new AudioCtx()
-    const startInterval = 0.05  // fast ticks at start
-    const endInterval = 0.4     // slow ticks at end
-    let elapsed = 0
-    let tickCount = 0
-    
-    const scheduleTicks = () => {
-      if (elapsed >= duration) {
-        setTimeout(onStop, 0)
-        return
-      }
-      const progress = elapsed / duration
-      const eased = 1 - Math.pow(1 - progress, 2)
-      const interval = startInterval + (endInterval - startInterval) * eased
-      const volume = 0.3 + (1 - eased) * 0.4
-      
-      createTickSound(ctx, ctx.currentTime, Math.min(volume, 0.7))
-      elapsed += interval
-      tickCount++
-      setTimeout(scheduleTicks, interval * 1000)
+function playSpinSound(duration: number) {
+  const ctx = getAudioContext()
+  if (!ctx) return
+  const startInterval = 0.05
+  const endInterval = 0.4
+  let elapsed = 0
+
+  const scheduleTick = () => {
+    if (elapsed >= duration) return
+    const progress = elapsed / duration
+    const eased = 1 - Math.pow(1 - progress, 2)
+    const interval = startInterval + (endInterval - startInterval) * eased
+    const volume = Math.min(0.7, 0.3 + (1 - eased) * 0.4)
+
+    // Create tick noise
+    const bufferSize = Math.floor(ctx.sampleRate * 0.03)
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1))
     }
-    scheduleTicks()
-    return ctx
-  } catch (e) {
-    setTimeout(onStop, duration * 1000)
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    const gain = ctx.createGain()
+    gain.gain.value = volume
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = 800
+    source.connect(filter)
+    filter.connect(gain)
+    gain.connect(ctx.destination)
+    source.start(ctx.currentTime)
+
+    elapsed += interval
+    setTimeout(scheduleTick, interval * 1000)
   }
+  scheduleTick()
 }
 
 function playFireworkSound() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-    
-    // Multiple explosion pops
-    ([0, 0.1, 0.25, 0.4, 0.6] as number[]).forEach((delay: number, i: number) => {
-      const bufferSize = ctx.sampleRate * 0.15
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-      const data = buffer.getChannelData(0)
-      for (let j = 0; j < bufferSize; j++) {
-        data[j] = (Math.random() * 2 - 1) * Math.exp(-j / (bufferSize * 0.15))
-      }
-      const source = ctx.createBufferSource()
-      source.buffer = buffer
-      const gain = ctx.createGain()
-      gain.gain.setValueAtTime(0.5 - i * 0.05, ctx.currentTime + delay)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3)
-      const filter = ctx.createBiquadFilter()
-      filter.type = 'lowpass'
-      filter.frequency.value = 400 + Math.random() * 600
-      source.connect(filter)
-      filter.connect(gain)
-      gain.connect(ctx.destination)
-      source.start(ctx.currentTime + delay)
-    })
+  const ctx = getAudioContext()
+  if (!ctx) return
 
-    // Rising whistle before explosion
-    const osc = ctx.createOscillator()
-    const oscGain = ctx.createGain()
-    osc.connect(oscGain)
-    oscGain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(200, ctx.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.3)
-    oscGain.gain.setValueAtTime(0.15, ctx.currentTime)
-    oscGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.35)
+  // Whistle up
+  const osc = ctx.createOscillator()
+  const oscGain = ctx.createGain()
+  osc.connect(oscGain)
+  oscGain.connect(ctx.destination)
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(300, ctx.currentTime)
+  osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.3)
+  oscGain.gain.setValueAtTime(0.2, ctx.currentTime)
+  oscGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32)
+  osc.start(ctx.currentTime)
+  osc.stop(ctx.currentTime + 0.35)
 
-    // Fanfare notes after
-    const notes = [523, 659, 784, 1047, 1319]
-    notes.forEach((freq, i) => {
-      const o = ctx.createOscillator()
-      const g = ctx.createGain()
-      o.connect(g)
-      g.connect(ctx.destination)
-      o.type = 'sine'
-      o.frequency.setValueAtTime(freq, ctx.currentTime + 0.5 + i * 0.12)
-      g.gain.setValueAtTime(0.25, ctx.currentTime + 0.5 + i * 0.12)
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5 + i * 0.12 + 0.3)
-      o.start(ctx.currentTime + 0.5 + i * 0.12)
-      o.stop(ctx.currentTime + 0.5 + i * 0.12 + 0.3)
-    })
-  } catch (e) {}
+  // Explosion pops
+  const delays = [0.3, 0.4, 0.5, 0.65, 0.8]
+  delays.forEach((delay, i) => {
+    const bufSize = Math.floor(ctx.sampleRate * 0.15)
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let j = 0; j < bufSize; j++) {
+      data[j] = (Math.random() * 2 - 1) * Math.exp(-j / (bufSize * 0.12))
+    }
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const g = ctx.createGain()
+    g.gain.value = 0.5 - i * 0.06
+    const f = ctx.createBiquadFilter()
+    f.type = 'lowpass'
+    f.frequency.value = 500 + Math.random() * 400
+    src.connect(f)
+    f.connect(g)
+    g.connect(ctx.destination)
+    src.start(ctx.currentTime + delay)
+  })
+
+  // Fanfare
+  const notes = [523, 659, 784, 1047, 1319]
+  notes.forEach((freq, i) => {
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    o.connect(g)
+    g.connect(ctx.destination)
+    o.type = 'sine'
+    o.frequency.value = freq
+    const t = ctx.currentTime + 1.0 + i * 0.13
+    g.gain.setValueAtTime(0.25, t)
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35)
+    o.start(t)
+    o.stop(t + 0.4)
+  })
 }
 
 export default function SpinnerPage() {
@@ -192,7 +185,6 @@ export default function SpinnerPage() {
     ctx.rotate(angle)
     ctx.translate(-cx, -cy)
 
-    // Draw sectors — offset by half slice so pointer hits CENTER of sector
     const sl = (Math.PI * 2) / n
     for (let i = 0; i < n; i++) {
       const start = i * sl - Math.PI / 2
@@ -219,7 +211,6 @@ export default function SpinnerPage() {
       ctx.restore()
     }
 
-    // Center circle
     ctx.beginPath()
     ctx.arc(cx, cy, 28, 0, Math.PI * 2)
     ctx.fillStyle = '#050510'
@@ -257,16 +248,14 @@ export default function SpinnerPage() {
       const idx = eligible.indexOf(winner)
       const n = eligible.length
       const sl = 360 / n
-      // Target: winner sector CENTER points to the pointer (top = 0 + 90 deg offset)
-      // Pointer is at right side (3 o'clock), so we want winner at 0 degrees from right
-      // Each sector center: idx * sl + sl/2
-      // We want -(idx * sl + sl/2) to be at 0 (right pointer), plus many full rotations
       const sectorCenter = idx * sl + sl / 2
       const current = angleRef.current % 360
       const target = angleRef.current + (360 * 8) - current - sectorCenter + 90
       const start = angleRef.current
       const t0 = Date.now()
       const dur = 4500
+
+      playSpinSound(dur / 1000)
 
       const anim = () => {
         const progress = Math.min((Date.now() - t0) / dur, 1)
@@ -282,8 +271,6 @@ export default function SpinnerPage() {
           showWinner(winner)
         }
       }
-
-      playSpinSound(dur / 1000, () => {})
       requestAnimationFrame(anim)
     } else {
       let count = 0
@@ -362,7 +349,7 @@ export default function SpinnerPage() {
 
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '24px' : '0' }}>
 
-          {/* Wheel side */}
+          {/* Wheel */}
           <div style={{
             flex: 1, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
@@ -401,7 +388,6 @@ export default function SpinnerPage() {
                 />
                 {participants.length <= SLOT_THRESHOLD && (
                   <>
-                    {/* Pointer at right (3 o'clock) */}
                     <div style={{
                       position: 'absolute', top: '50%', right: -28,
                       transform: 'translateY(-50%)',
@@ -573,7 +559,6 @@ export default function SpinnerPage() {
 
       <Footer />
 
-      {/* Winner modal */}
       {currentWinner && (
         <div style={{
           position: 'fixed', inset: 0,

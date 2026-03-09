@@ -329,35 +329,33 @@ export default function SpinnerPage() {
       }
       requestAnimationFrame(anim)
     } else {
-      // Slot machine - scrolling column
-      const canvas = canvasRef.current!
-      const H = canvas.height
       const itemH = 56
-      let scrollY = 0
-      let speed = 30
-      const minSpeed = 1.2
-      const totalItems = eligible.length
+      // Build fixed display list with winner at a known position at the end
+      const displayList: string[] = []
+      for (let i = 0; i < 60; i++) {
+        displayList.push(eligible[Math.floor(Math.random() * eligible.length)])
+      }
+      displayList.push(winner)
+      const targetScrollY = (displayList.length - 1) * itemH
 
+      let scrollY = 0
       playSpinSound(3.5)
 
       const animateSlot = () => {
-        scrollY += speed
-        // Decelerate smoothly
-        if (speed > minSpeed) {
-          speed = Math.max(minSpeed, speed * 0.975)
-        }
-
-        drawSlotMachine(eligible, scrollY, winner, false)
-
-        if (speed > minSpeed + 0.1) {
-          requestAnimationFrame(animateSlot)
-        } else {
-          // Snap to winner centered
-          drawSlotMachine(eligible, scrollY, winner, true)
+        const remaining = targetScrollY - scrollY
+        if (remaining <= 0.5) {
+          drawSlotMachine(displayList, targetScrollY, winner, true)
           spinningRef.current = false
           setSpinStatus('')
           setTimeout(() => showWinner(winner), 600)
+          return
         }
+        // Ease out — slow as we approach target
+        const progress = scrollY / targetScrollY
+        const speed = Math.max(1.5, 38 * (1 - Math.pow(progress, 2.5)))
+        scrollY = Math.min(scrollY + speed, targetScrollY)
+        drawSlotMachine(displayList, scrollY, winner, false)
+        requestAnimationFrame(animateSlot)
       }
       animateSlot()
     }

@@ -543,16 +543,8 @@ export default function GiveawayPage() {
   const handleReqAction = (req: any) => {
     if (req.type === 'follow') {
       window.open(`https://twitter.com/intent/follow?screen_name=${req.username}`, '_blank')
-    } else if (req.type === 'like') {
-      const tweetId = req.tweet_url?.split('/').pop()?.split('?')[0]
-      if (tweetId) window.open(`https://twitter.com/intent/like?tweet_id=${tweetId}`, '_blank')
-      else window.open(req.tweet_url, '_blank')
-    } else if (req.type === 'retweet') {
-      const tweetId = req.tweet_url?.split('/').pop()?.split('?')[0]
-      if (tweetId) window.open(`https://twitter.com/intent/retweet?tweet_id=${tweetId}`, '_blank')
-      else window.open(req.tweet_url, '_blank')
     }
-    // After opening, move to next step after short delay
+    // like and reply are honor system — just mark as done
     setTimeout(() => {
       const reqs = giveaway?.requirements || []
       if (reqStep + 1 >= reqs.length) {
@@ -560,7 +552,7 @@ export default function GiveawayPage() {
       } else {
         setReqStep(reqStep + 1)
       }
-    }, 1500)
+    }, req.type === 'follow' ? 1500 : 300)
   }
 
   if (loading) {
@@ -832,8 +824,8 @@ export default function GiveawayPage() {
               {(giveaway.requirements || []).map((req, i) => {
                 const isDone = reqDone || i < reqStep
                 const isCurrent = !reqDone && i === reqStep
-                const label = req.type === 'follow' ? `Follow @${req.username}` : req.type === 'like' ? 'Like the tweet' : 'Retweet the tweet'
-                const icon = req.type === 'follow' ? '👤' : req.type === 'like' ? '❤️' : '🔁'
+                const label = req.type === 'follow' ? `Follow @${req.username}` : req.type === 'like' ? '❤️ Like the giveaway post' : '💬 Reply to the giveaway post'
+                const icon = req.type === 'follow' ? '👤' : req.type === 'like' ? '❤️' : '💬'
 
                 return (
                   <div key={i}

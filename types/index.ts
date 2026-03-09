@@ -6,10 +6,8 @@ export interface User {
 }
 
 export interface GiveawayRequirement {
-  type: 'follow' | 'like' | 'retweet'
-  username?: string   // for follow
-  tweet_url?: string  // for like/retweet
-  tweet_id?: string   // extracted from tweet_url
+  type: 'follow' | 'like' | 'reply'
+  username?: string  // only for follow
 }
 
 export interface Giveaway {

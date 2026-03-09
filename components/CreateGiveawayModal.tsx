@@ -20,24 +20,29 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
   const [error, setError] = useState('')
 
   // Requirements
-  const [reqFollow, setReqFollow] = useState(true)
-  const [followUsername, setFollowUsername] = useState(user.user_metadata?.user_name || '')
+  const [followUsernames, setFollowUsernames] = useState<string[]>([
+    user.user_metadata?.user_name || ''
+  ])
   const [reqLike, setReqLike] = useState(false)
-  const [reqRetweet, setReqRetweet] = useState(false)
-  const [tweetUrl, setTweetUrl] = useState('')
+  const [reqReply, setReqReply] = useState(false)
+
+  const addFollowField = () => setFollowUsernames(prev => [...prev, ''])
+  const removeFollowField = (i: number) => setFollowUsernames(prev => prev.filter((_, idx) => idx !== i))
+  const updateFollow = (i: number, val: string) => setFollowUsernames(prev => prev.map((v, idx) => idx === i ? val : v))
 
   const handleLaunch = async () => {
     if (!title.trim()) { setError('Title is required'); return }
-    if (reqFollow && !followUsername.trim()) { setError('Enter username for Follow requirement'); return }
-    if ((reqLike || reqRetweet) && !tweetUrl.trim()) { setError('Enter tweet URL for Like/Retweet requirement'); return }
 
     setLoading(true)
     setError('')
 
     const requirements: GiveawayRequirement[] = []
-    if (reqFollow) requirements.push({ type: 'follow', username: followUsername.replace('@', '').trim() })
-    if (reqLike) requirements.push({ type: 'like', tweet_url: tweetUrl.trim() })
-    if (reqRetweet) requirements.push({ type: 'retweet', tweet_url: tweetUrl.trim() })
+    followUsernames.forEach(u => {
+      const clean = u.replace('@', '').trim()
+      if (clean) requirements.push({ type: 'follow', username: clean })
+    })
+    if (reqLike) requirements.push({ type: 'like' })
+    if (reqReply) requirements.push({ type: 'reply' })
 
     try {
       const ends_at = new Date(Date.now() + hours * 3600000).toISOString()
@@ -52,14 +57,14 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
         requirements,
       })
 
-      const reqText = requirements.map(r => {
-        if (r.type === 'follow') return `• Follow @${r.username}`
-        if (r.type === 'like') return `• Like this tweet`
-        if (r.type === 'retweet') return `• Retweet this tweet`
-        return ''
-      }).join('\n')
+      const followList = followUsernames.filter(u => u.trim()).map(u => `@${u.replace('@','').trim()}`).join(', ')
+      const reqLines = [
+        followList ? `• Follow ${followList}` : '',
+        reqLike ? '• Like this post' : '',
+        reqReply ? '• Reply to this post' : '',
+      ].filter(Boolean).join('\n')
 
-      const tweetText = `🎰 I'm hosting a giveaway on @superspinonline!\n\n${title}${description ? `\n${description}` : ''}\n\n🏆 ${winnerCount} winner${winnerCount > 1 ? 's' : ''}\n\nTo enter:\n${reqText}\n\nJoin 👉 ${window.location.origin}/giveaway/${giveaway.id}`
+      const tweetText = `🎰 I'm hosting a giveaway on @superspinonline!\n\n${title}${description ? `\n${description}` : ''}\n\n🏆 ${winnerCount} winner${winnerCount > 1 ? 's' : ''}\n\nTo enter:\n${reqLines}\n\nJoin 👉 ${window.location.origin}/giveaway/${giveaway.id}`
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank')
 
       onCreated(giveaway.id)
@@ -70,67 +75,39 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
   }
 
   const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '13px 16px',
+    width: '100%', padding: '13px 16px',
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid var(--border)',
-    borderRadius: '12px',
-    color: '#fff',
-    fontSize: '1rem',
-    outline: 'none',
+    borderRadius: '12px', color: '#fff',
+    fontSize: '1rem', outline: 'none',
     transition: 'border-color 0.3s',
     boxSizing: 'border-box',
   }
 
   const labelStyle: React.CSSProperties = {
-    display: 'block',
-    fontFamily: 'Orbitron, monospace',
-    fontSize: '0.62rem',
-    letterSpacing: '2px',
-    color: 'var(--neon-blue)',
-    marginBottom: '8px',
+    display: 'block', fontFamily: 'Orbitron, monospace',
+    fontSize: '0.62rem', letterSpacing: '2px',
+    color: 'var(--neon-blue)', marginBottom: '8px',
     textTransform: 'uppercase',
   }
 
-  const CheckRow = ({ checked, onChange, label }: { checked: boolean, onChange: () => void, label: string }) => (
-    <div
-      onClick={onChange}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '10px',
-        padding: '10px 14px',
-        background: checked ? 'rgba(178,75,255,0.08)' : 'rgba(255,255,255,0.03)',
-        border: `1px solid ${checked ? 'rgba(178,75,255,0.35)' : 'var(--border)'}`,
-        borderRadius: '10px', cursor: 'pointer',
-        transition: 'all 0.2s',
-      }}
-    >
-      <div style={{
-        width: 18, height: 18, borderRadius: '5px', flexShrink: 0,
-        background: checked ? '#b24bff' : 'transparent',
-        border: `2px solid ${checked ? '#b24bff' : 'rgba(255,255,255,0.2)'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.2s',
-      }}>
+  const CheckRow = ({ checked, onChange, label, sublabel }: { checked: boolean, onChange: () => void, label: string, sublabel?: string }) => (
+    <div onClick={onChange} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', background: checked ? 'rgba(178,75,255,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${checked ? 'rgba(178,75,255,0.35)' : 'var(--border)'}`, borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s' }}>
+      <div style={{ width: 18, height: 18, borderRadius: '5px', flexShrink: 0, background: checked ? '#b24bff' : 'transparent', border: `2px solid ${checked ? '#b24bff' : 'rgba(255,255,255,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
         {checked && <span style={{ color: '#fff', fontSize: '11px', lineHeight: 1 }}>✓</span>}
       </div>
-      <span style={{ fontSize: '0.9rem', color: checked ? '#fff' : 'rgba(255,255,255,0.6)' }}>{label}</span>
+      <div>
+        <span style={{ fontSize: '0.9rem', color: checked ? '#fff' : 'rgba(255,255,255,0.6)' }}>{label}</span>
+        {sublabel && <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>{sublabel}</div>}
+      </div>
     </div>
   )
 
-  const needsTweetUrl = reqLike || reqRetweet
-
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.92)', backdropFilter: 'blur(20px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(178,75,255,0.1), rgba(0,212,255,0.06))',
-        border: '1px solid rgba(178,75,255,0.25)',
-        borderRadius: '24px', padding: '44px',
-        width: '100%', maxWidth: '520px',
-        boxShadow: '0 0 80px rgba(178,75,255,0.2)',
-      }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.92)', backdropFilter: 'blur(20px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: 'linear-gradient(135deg, rgba(178,75,255,0.1), rgba(0,212,255,0.06))', border: '1px solid rgba(178,75,255,0.25)', borderRadius: '24px', padding: '44px', width: '100%', maxWidth: '520px', boxShadow: '0 0 80px rgba(178,75,255,0.2)' }}>
+
         <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '2px', background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', marginBottom: '32px' }}>
           HOST A GIVEAWAY
         </div>
@@ -172,34 +149,42 @@ export default function CreateGiveawayModal({ user, onClose, onCreated }: Props)
         {/* Requirements */}
         <div style={{ marginBottom: '24px' }}>
           <label style={labelStyle}>Entry Requirements</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <CheckRow checked={reqFollow} onChange={() => setReqFollow(!reqFollow)} label="Follow on X" />
-            {reqFollow && (
-              <div style={{ paddingLeft: '12px' }}>
-                <input
-                  style={{ ...inputStyle, fontSize: '0.9rem', padding: '10px 14px' }}
-                  placeholder="@username"
-                  value={followUsername}
-                  onChange={e => setFollowUsername(e.target.value)}
-                  onFocus={e => e.target.style.borderColor = 'var(--neon-purple)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
-                />
-              </div>
-            )}
-            <CheckRow checked={reqLike} onChange={() => setReqLike(!reqLike)} label="Like the tweet" />
-            <CheckRow checked={reqRetweet} onChange={() => setReqRetweet(!reqRetweet)} label="Retweet the tweet" />
-            {needsTweetUrl && (
-              <div style={{ paddingLeft: '12px' }}>
-                <input
-                  style={{ ...inputStyle, fontSize: '0.9rem', padding: '10px 14px' }}
-                  placeholder="https://x.com/username/status/..."
-                  value={tweetUrl}
-                  onChange={e => setTweetUrl(e.target.value)}
-                  onFocus={e => e.target.style.borderColor = 'var(--neon-purple)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
-                />
-              </div>
-            )}
+
+          {/* Follow fields */}
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>👤 Follow on X</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {followUsernames.map((u, i) => (
+                <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    style={{ ...inputStyle, fontSize: '0.9rem', padding: '10px 14px', flex: 1 }}
+                    placeholder="@username"
+                    value={u}
+                    onChange={e => updateFollow(i, e.target.value)}
+                    onFocus={e => e.target.style.borderColor = 'var(--neon-purple)'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                  />
+                  {i > 0 && (
+                    <button onClick={() => removeFollowField(i)}
+                      style={{ width: 36, height: 36, background: 'rgba(255,45,120,0.1)', border: '1px solid rgba(255,45,120,0.2)', borderRadius: '8px', color: '#ff2d78', cursor: 'pointer', fontSize: '16px', flexShrink: 0 }}>
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              {followUsernames.length < 5 && (
+                <button onClick={addFollowField}
+                  style={{ alignSelf: 'flex-start', padding: '7px 14px', background: 'rgba(178,75,255,0.08)', border: '1px dashed rgba(178,75,255,0.3)', borderRadius: '8px', color: '#b24bff', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'Orbitron, monospace', letterSpacing: '1px' }}>
+                  + Add another
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Like + Reply */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+            <CheckRow checked={reqLike} onChange={() => setReqLike(!reqLike)} label="❤️ Like the giveaway post" sublabel="Optional — participants will know which post" />
+            <CheckRow checked={reqReply} onChange={() => setReqReply(!reqReply)} label="💬 Reply to the giveaway post" sublabel="Optional — participants will know which post" />
           </div>
         </div>
 

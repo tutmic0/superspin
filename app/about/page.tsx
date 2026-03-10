@@ -13,7 +13,7 @@ export default function AboutPage() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  const CA = null // Will be updated after Bags launch
+  const CA = '4GHUKi882wGbnyKSMugoNvfLXmb3MPDAcdWkVEqKBAGS'
 
   return (
     <>
@@ -60,7 +60,7 @@ export default function AboutPage() {
 
         {/* $SUPERSPIN token */}
         <Section title="$SUPERSPIN Token" icon="🪙">
-          <p>SuperSpin is now live on <a href="https://bags.fm" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--neon-purple)', textDecoration: 'none' }}>Bags.fm</a> — a token launchpad where creators share fees with their community.</p>
+          <p>SuperSpin is live on <a href="https://bags.fm" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--neon-purple)', textDecoration: 'none' }}>Bags.fm</a> — a token launchpad where creators share fees with their community.</p>
           <p style={{ marginTop: '12px' }}>
             <strong style={{ color: '#fff' }}>80% of all $SUPERSPIN trading fees</strong> are distributed daily through live giveaways on superspin.online. Every day at 9:00 AM UTC, a new "Daily Fees Sharing Giveaway" goes live — anyone can enter, one lucky winner takes the pot.
           </p>
@@ -78,17 +78,35 @@ export default function AboutPage() {
             ))}
           </div>
 
-          {CA ? (
-            <div style={{ marginTop: '20px', padding: '16px 20px', background: 'rgba(178,75,255,0.08)', border: '1px solid rgba(178,75,255,0.25)', borderRadius: '12px' }}>
-              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.6rem', letterSpacing: '3px', color: 'var(--neon-purple)', marginBottom: '8px' }}>CONTRACT ADDRESS</div>
-              <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.7rem' : '0.85rem', color: '#fff', wordBreak: 'break-all' }}>{CA}</div>
+          {/* CA Box */}
+          <div style={{ marginTop: '20px', padding: '20px 24px', background: 'rgba(0,200,80,0.06)', border: '1px solid rgba(0,200,80,0.2)', borderRadius: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <img src="/bags-logo.jpg" alt="Bags.fm" style={{ width: 24, height: 24, borderRadius: '50%' }} />
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.6rem', letterSpacing: '3px', color: '#00c850' }}>CONTRACT ADDRESS</div>
             </div>
-          ) : (
-            <div style={{ marginTop: '20px', padding: '16px 20px', background: 'rgba(255,215,0,0.04)', border: '1px solid rgba(255,215,0,0.15)', borderRadius: '12px' }}>
-              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.6rem', letterSpacing: '3px', color: 'var(--gold)', marginBottom: '6px' }}>CONTRACT ADDRESS</div>
-              <div style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>Launching soon on Bags.fm — CA will be posted here.</div>
-            </div>
-          )}
+            <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.65rem' : '0.8rem', color: '#fff', wordBreak: 'break-all', marginBottom: '12px' }}>{CA}</div>
+            <a
+              href={`https://bags.fm/token/${CA}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '8px 20px',
+                background: 'rgba(0,200,80,0.12)',
+                border: '1px solid rgba(0,200,80,0.3)',
+                borderRadius: '50px',
+                color: '#00c850',
+                fontFamily: 'Orbitron, monospace',
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                letterSpacing: '1px',
+                textDecoration: 'none',
+              }}
+            >
+              <img src="/bags-logo.jpg" alt="Bags" style={{ width: 14, height: 14, borderRadius: '50%' }} />
+              BUY ON BAGS.FM
+            </a>
+          </div>
         </Section>
 
         {/* Why SuperSpin */}
@@ -112,7 +130,7 @@ export default function AboutPage() {
         </Section>
 
         {/* CTA */}
-        <div style={{ textAlign: 'center', marginTop: isMobile ? '48px' : '72px', padding: '48px 32px', background: 'linear-gradient(135deg, rgba(178,75,255,0.08), rgba(0,212,255,0.05))', border: '1px solid rgba(178,75,255,0.2)', borderRadius: '24px' }}>
+        <div style={{ textAlign: 'center', marginTop: isMobile ? '48px' : '72px', marginBottom: '80px', padding: '48px 32px', background: 'linear-gradient(135deg, rgba(178,75,255,0.08), rgba(0,212,255,0.05))', border: '1px solid rgba(178,75,255,0.2)', borderRadius: '24px' }}>
           <div style={{ fontFamily: 'Orbitron, monospace', fontSize: isMobile ? '1.2rem' : '1.8rem', fontWeight: 900, marginBottom: '16px' }}>
             Ready to spin?
           </div>
@@ -135,7 +153,7 @@ function Section({ title, icon, children }: { title: string, icon: string, child
     <div style={{ marginBottom: '48px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
         <span style={{ fontSize: '1.4rem' }}>{icon}</span>
-        <h2 style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '3px', color: 'var(--neon-blue)', textTransform: 'uppercase' }}>{title}</h2>
+        <h2 style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '3px', color: 'var(--neon-blue)', textTransform: 'uppercase' as const }}>{title}</h2>
       </div>
       <div style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.8, fontSize: '0.95rem' }}>
         {children}

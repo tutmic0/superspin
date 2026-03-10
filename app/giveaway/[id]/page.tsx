@@ -567,8 +567,6 @@ export default function GiveawayPage() {
     }, req.type === 'follow' ? 1500 : 300)
   }
 
-    }
-
   if (loading) {
     return (
       <>

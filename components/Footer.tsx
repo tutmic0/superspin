@@ -11,23 +11,6 @@ export default function Footer() {
       gap: '4px',
     }}>
       <a
-        href="https://x.com/superspinonline"
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          fontSize: '0.7rem',
-          color: 'rgba(255,255,255,0.25)',
-          fontFamily: 'Orbitron, monospace',
-          letterSpacing: '1px',
-          textDecoration: 'none',
-          transition: 'color 0.2s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--neon-purple)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}
-      >
-        Powered by SuperSpin.online
-      </a>
-      <a
         href="https://x.com/tuuu995"
         target="_blank"
         rel="noopener noreferrer"

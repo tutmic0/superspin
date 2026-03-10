@@ -50,6 +50,29 @@ export default function Navbar() {
 
   const isGiveaway = pathname === '/' || pathname.startsWith('/giveaway')
   const isSpinner = pathname === '/spinner'
+  const isAbout = pathname === '/about'
+
+  const navLink = (href: string, active: boolean, label: string, shortLabel: string, icon: string) => (
+    <Link href={href} style={{
+      padding: isMobile ? '6px 10px' : '8px 20px',
+      borderRadius: '10px',
+      background: active ? 'rgba(178,75,255,0.12)' : 'transparent',
+      color: active ? 'var(--neon-purple)' : 'var(--text-dim)',
+      fontFamily: 'Orbitron, monospace',
+      fontSize: isMobile ? '0.5rem' : '0.65rem',
+      fontWeight: 700,
+      letterSpacing: isMobile ? '1px' : '2px',
+      boxShadow: active ? '0 0 15px rgba(178,75,255,0.2)' : 'none',
+      textDecoration: 'none',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      transition: 'all 0.2s',
+      whiteSpace: 'nowrap' as const,
+    }}>
+      {icon} {isMobile ? shortLabel : label}
+    </Link>
+  )
 
   return (
     <header style={{
@@ -78,40 +101,9 @@ export default function Navbar() {
       </Link>
 
       <nav style={{ display: 'flex', gap: '2px' }}>
-        <Link href="/" style={{
-          padding: isMobile ? '6px 10px' : '8px 20px',
-          borderRadius: '10px',
-          background: isGiveaway ? 'rgba(178,75,255,0.12)' : 'transparent',
-          color: isGiveaway ? 'var(--neon-purple)' : 'var(--text-dim)',
-          fontFamily: 'Orbitron, monospace',
-          fontSize: isMobile ? '0.5rem' : '0.65rem',
-          fontWeight: 700,
-          letterSpacing: isMobile ? '1px' : '2px',
-          boxShadow: isGiveaway ? '0 0 15px rgba(178,75,255,0.2)' : 'none',
-          textDecoration: 'none',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '4px',
-        }}>
-          🎁 {isMobile ? 'GW' : 'GIVEAWAY'}
-        </Link>
-        <Link href="/spinner" style={{
-          padding: isMobile ? '6px 10px' : '8px 20px',
-          borderRadius: '10px',
-          background: isSpinner ? 'rgba(178,75,255,0.12)' : 'transparent',
-          color: isSpinner ? 'var(--neon-purple)' : 'var(--text-dim)',
-          fontFamily: 'Orbitron, monospace',
-          fontSize: isMobile ? '0.5rem' : '0.65rem',
-          fontWeight: 700,
-          letterSpacing: isMobile ? '1px' : '2px',
-          boxShadow: isSpinner ? '0 0 15px rgba(178,75,255,0.2)' : 'none',
-          textDecoration: 'none',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '4px',
-        }}>
-          🎰 SPIN
-        </Link>
+        {navLink('/', isGiveaway, 'GIVEAWAY', 'GW', '🎁')}
+        {navLink('/spinner', isSpinner, 'SPIN', 'SPIN', '🎰')}
+        {navLink('/about', isAbout, 'ABOUT', 'INFO', 'ℹ️')}
       </nav>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
@@ -152,7 +144,7 @@ export default function Navbar() {
             fontSize: isMobile ? '0.8rem' : '1rem',
             fontWeight: 600, letterSpacing: '1px', cursor: 'pointer',
           }}>
-            <span>𝕏</span> {isMobile ? '' : 'Login with X'}
+            <span>🐦</span> {isMobile ? '' : 'Login with X'}
           </button>
         )}
       </div>

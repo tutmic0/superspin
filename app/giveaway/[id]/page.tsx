@@ -567,22 +567,7 @@ export default function GiveawayPage() {
     }, req.type === 'follow' ? 1500 : 300)
   }
 
-  const shareResults = (w: Winner[]) => {
-    const reward = giveaway?.description ? `\n🎁 Reward: ${giveaway.description}` : ''
-    const winnerLines = w.length === 1
-      ? `🏆 Winner: @${w[0].username}`
-      : w.map((win, i) => `🏆 #${i + 1} @${win.username}`).join('\n')
-    const text = [
-      `🎉 Giveaway results for "${giveaway?.title}"!`,
-      ``,
-      winnerLines,
-      reward,
-      ``,
-      `Powered by superspin.online`,
-      `${window.location.origin}/giveaway/${id}`,
-    ].join('\n')
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank')
-  }
+    }
 
   if (loading) {
     return (

@@ -86,7 +86,7 @@ export default function AboutPage() {
             </div>
             <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.65rem' : '0.8rem', color: '#fff', wordBreak: 'break-all', marginBottom: '12px' }}>{CA}</div>
             <a
-              href={`https://bags.fm/token/${CA}`}
+              href="https://bags.fm/4GHUKi882wGbnyKSMugoNvfLXmb3MPDAcdWkVEqKBAGS"}
               target="_blank"
               rel="noopener noreferrer"
               style={{
